@@ -2,12 +2,16 @@
 // @id              macos-style-dock
 // @name            MacOS Style Dock
 // @description     Turns the Windows 11 taskbar into a macOS-style dock with magnifying icons
-// @version         1.2.0
+// @version         1.2.2
 // @author          Zach Vaughn
 // @github          https://github.com/zachvdev
 // @include         explorer.exe
+// @include         StartMenuExperienceHost.exe
+// @include         ShellExperienceHost.exe
+// @include         ShellHost.exe
+// @include         SearchHost.exe
 // @architecture    x86-64
-// @compilerOptions -lole32 -loleaut32 -lruntimeobject -lversion -lgdi32 -lshell32 -lshcore -ladvapi32 -ldwmapi -lgdiplus -ld2d1 -ld3d11 -ldxgi
+// @compilerOptions -lole32 -loleaut32 -lruntimeobject -lversion -lgdi32 -lshell32 -lshcore -ladvapi32 -ldwmapi -lgdiplus -ld2d1 -ld3d11 -ldxgi -lcomctl32
 // @license         GPL-3.0
 // ==/WindhawkMod==
 
@@ -15,10 +19,17 @@
 /*
 # MacOS Style Dock
 
+> **Found a bug or have an idea?** Please open an issue on the dock's own
+> repository,
+> [zachvdev/MacOS-Style-Dock](https://github.com/zachvdev/MacOS-Style-Dock/issues),
+> not on Windhawk's. Only problems with Windhawk itself belong in
+> [Windhawk's repository](https://github.com/ramensoftware/windhawk/issues).
+
 Turns the Windows 11 taskbar into a macOS-style dock: frosted glass (or real
 Liquid Glass), icons that magnify under the pointer, running dots, app name
-labels, File Explorer first and the Recycle Bin last, and hot corners for Task
-View, Start and the system tray.
+labels, File Explorer first and the Recycle Bin last, your own icons for any
+app, hot corners for Task View, Start and the system tray, Start opening in
+the middle of the screen, and the tray's menus sliding in from its side.
 
 It restyles the real taskbar instead of replacing it, so everything you're
 used to keeps working: pinned apps, right-click menus, dropping files onto
@@ -102,6 +113,10 @@ at "System type".
   and icon size", "Taskbar Dock Animation", "Taskbar Dock Animation Plus",
   "Mac Island & Dock", "Multirow taskbar for Windows 11", "Start button
   always on the left" or "Disable Taskbar Thumbnails".
+- **Mods that change Start or the tray's menus**, such as "Shell Flyout
+  Positions", "Windows 11 Start Menu Styler" or "Notification Center Follows
+  Taskbar", need "Control Start Menu" or "Control System Tray Menus" turned
+  off.
 - **Smart App Control** blocks this mod, as it does all Windhawk mods.
 
 ## Getting started
@@ -120,11 +135,12 @@ Turning the mod off puts the taskbar back to normal.
   all, leaving just the border.
 - **Apple's corners.** Not a plain rounded rectangle, but the smooth
   "squircle" corner Apple uses, built from PaintCode's measurements of it.
-- **A Mac border.** A thin light line along the top and bottom, a faint dark
-  line along the sides, and a soft glow inside that fades out with no hard
-  edge. The glow can come from the sides instead, or from all four. You can
-  also pick a plain one-color border (Standard), one in a color, width and
-  opacity of your choice (Custom), or none.
+- **A Mac border.** A soft glow inside the top and bottom with a thin light
+  line along them, and a faint dark line along the sides. Each side's glow or
+  shadow has its own color, opacity and size, as on squircle icons, and
+  follows the corners round; a side that glows gets the light line, any other
+  the dark one. You can also pick a plain one-color border (Standard), one in
+  a color, width and opacity of your choice (Custom), or none.
 - **Activity dots.** A small dot under each open app, the same size at any
   dock size, as on a Mac. Dots and dividers turn dark on a light dock and
   light on a dark one. "App Activity Indicators" has other styles: Hybrid
@@ -167,7 +183,8 @@ back to Off for the plain frosted glass. The tray gets the same glass while it
 matches the dock (see "The system tray"); it slides in and out by its hot
 corner with the glass it last showed, which is right again once it's in
 place. Once the dock has been hidden for a couple of seconds, the screen
-behind it stops being captured until it's back.
+behind it stops being captured until it's back. The pointer never shows in
+the glass: around it, the glass keeps what was there before the pointer came.
 
 While Liquid Glass is on, the dock's labels are left out of screen captures
 along with the taskbar.
@@ -195,7 +212,9 @@ mod's log says why, whenever the frosted glass is used instead.
   their neighbors aside, and the dock stretches to fit. As on a Mac, the end
   farther from the pointer stays put.
 - **Sharp at any size.** App icons are loaded at their fully magnified size,
-  so they don't blur as they grow.
+  so they don't blur as they grow. Some apps give Windows only a small icon,
+  which would come back tiny at that size: those get the icon Start shows for
+  them instead, or, if that's small too, their own icon enlarged.
 - **Squircle icons** (on by default). Every app's icon becomes a macOS-style
   tile, so the whole dock matches:
   - Icons that are already square are trimmed to the squircle shape.
@@ -203,12 +222,28 @@ mod's log says why, whenever the frosted glass is used instead.
     picks the tile: Auto gives whichever of light or dark sets the logo off
     better; Prefer Light makes it light unless the logo is very light, and
     Prefer Dark makes it dark unless the logo is very dark; Always Light and
-    Always Dark ignore the logo; Custom uses a color of your choice.
-  - Each tile gets a soft shadow.
+    Always Dark ignore the logo; Custom uses a color of your choice. The light
+    and dark tiles' colors can be changed too.
+  - Each tile gets a thin highlight along its top and left edges, soft
+    shading along its bottom and right, as if lit from the top left, and a
+    drop shadow.
+  - Your own File Explorer, Start and app icons become tiles too, unless set
+    to ignore them (see "Custom icons"). Start, kept in the dock, becomes a
+    tile of four blues.
+
+  Everything about the tiles is under "Squircle Icons" in the settings: their
+  colors; how vivid the icons' colors are; a sheen over all of them, fading
+  out from the top; a glow or shadow along each side, each with its own
+  color, opacity and size (a light color glows, a dark one shades), following
+  the corners round; the drop shadow's spread, distance, opacity and
+  direction; and the corners, Apple's smooth squircle curve or plain rounded
+  ones, and how round they are.
 
   Tiles appear a few seconds after the mod starts, once the taskbar has
-  finished loading its icons. If the taskbar never lets an icon be drawn,
-  its tile is made from the app's icon as Start shows it.
+  finished loading its icons. After that, a newly opened app's icon appears
+  once its tile is ready, rather than Windows' icon first (or Windows' after
+  5 seconds, if its tile isn't ready by then). If the taskbar never lets an
+  icon be drawn, its tile is made from the app's icon as Start shows it.
 - **Still icons** (off by default). Windows bounces an app's icon as its
   windows open, close, minimize or are restored. Turn on "Keep Icons Still"
   to stop that.
@@ -221,7 +256,10 @@ mod's log says why, whenever the frosted glass is used instead.
   To leave your order alone, turn off "Keep File Explorer First".
 - **Start** is hidden from the dock; the Windows key and the bottom left hot
   corner open it. Turn off "Hide Windows Start Button" to keep it at the
-  front of the dock, with Windows' icon or your own.
+  front of the dock. With Squircle Icons on, it's a tile of four blues, from
+  light at the top left to deep at the bottom right, like Windows' logo
+  without the gaps; turn on "Start Menu Icon Ignores Squircle" for Windows'
+  own logo instead. Or give it your own icon (below).
 - **The Recycle Bin** sits at the far end. Its icon shows when there's
   something in it.
   - Click it to open it.
@@ -236,8 +274,8 @@ and Trash.
 ## Custom icons
 
 Give File Explorer, Start and the Recycle Bin your own icons, like macOS's
-Finder, Launchpad and Trash, from image files on your PC. Leave a setting
-blank to keep Windows' icon.
+Finder, Launchpad and Trash, from image files on your PC, and any other app
+too (see "Any app" below). Leave a setting blank to keep Windows' icon.
 
 1. **Get the icons.** Download them from the links at the top, or use your
    own. PNG and Mac .icns files both work, as does any image Windows can
@@ -267,19 +305,59 @@ which holds several sizes, it uses the largest, up to 1024x1024. Very old
 .icns files (from before 2011) can't be read, and Windows' icon shows
 instead.
 
-If an icon looks too big or small, change its **margins**, from -50 to 50.
-At 0, the default, a macOS icon matches the apps next to it: macOS icons
-leave empty space around their artwork for a shadow, which spills past the
-icon's spot. Higher numbers add space, making the icon smaller (10 is 10%
-smaller); lower ones make it bigger. An image with no empty space around its
-artwork looks right at about 20.
+With Squircle Icons on, your File Explorer and Start icons go in squircle
+tiles like the apps' icons, with the same sheen, edges and shadow: an image
+that's already a rounded square, like a macOS icon, is trimmed to the tile's
+shape, and anything else is placed on a tile. To show one as it is instead,
+turn on its "Ignores Squircle" setting. The Recycle Bin's icons always show as
+they are.
+
+If an icon that isn't in a tile looks too big or small, change its
+**margins**, from -50 to 50. At 0, the default, a macOS icon matches the apps
+next to it: macOS icons leave empty space around their artwork for a shadow,
+which spills past the icon's spot. Higher numbers add space, making the icon
+smaller (10 is 10% smaller); lower ones make it bigger. An image with no
+empty space around its artwork looks right at about 20. In a tile, margins
+make no difference: a tile's made from what's shown of the image, whatever
+space is around it.
+
+### Any app
+
+Any app in the dock can have your own icon, under "App Icons" in "Custom
+Icons":
+
+1. **Copy the app's ID.** Hover over its icon in the dock and press Ctrl+I.
+   Its label turns into a card with the app's name, ID and .exe, and the ID
+   is copied. Press Ctrl+I again to copy its .exe instead.
+2. **Add it to "App Icons".** In the mod's settings, add an item to "App
+   Icons", paste into "App", and put the image's path in "Icon (path)", as
+   above. Then save.
+
+"App" can also be the app's name, as its label shows it (like "Google
+Chrome"), or its .exe (like `chrome.exe`, or its full path). The ID always
+works, and it's the only one that tells apart the dock icons of one program,
+like Chrome's profiles and the web apps it installs. A name can change with
+Windows' language, and an app opened through a launcher, like Discord, may
+not be known by its own .exe until it's running: for those, use the ID. If
+more than one item could match an app, one with its ID comes first, then one
+with its name, then one with its .exe. The card shows which one it's using.
+
+With Squircle Icons on, your image goes in a squircle tile, as above. To show
+it as it is instead, turn on its "Ignore Squircle".
+
+Only the dock changes: Start, Alt+Tab and the app's own windows keep its
+usual icon.
 
 ## Using the dock
 
-- **App names on hover**, in macOS-style labels. Turn "Show Tooltips over
-  Icons" off to get Windows' own tooltips back. Windows' window previews
-  open when you click an app with more than one window. Turn on "See Window
-  Previews" to also see them on hover, just above the label.
+- **App names on hover**, in macOS-style labels. Their look is yours in
+  "Tooltips": their color, font (any you've installed, or a font file) and
+  size, how round their corners are, the tail, and a glow or shadow along
+  each side that follows the corners and tail round, as on squircle icons.
+  Turn "Show Tooltips over Icons" off to get Windows' own tooltips back.
+  Windows' window previews open when you click an app with more than one
+  window. Turn on "See Window Previews" to also see them on hover, just above
+  the label.
 - **Rearranging.** Drag apps anywhere between File Explorer and the Recycle
   Bin. While you drag, icons stop magnifying, and the one you're moving fades
   slightly.
@@ -293,6 +371,11 @@ artwork looks right at about 20.
   the dock slides away instead, until the window's dragged back up.
 - **Task View** hides the dock, whatever Auto-hide is set to, and its row of
   desktops sits at the bottom of the screen.
+- **App info.** Hover over an icon and press Ctrl+I to see the app's ID and
+  .exe, for "App Icons" (see "Any app" above). Ctrl+I is only taken while the
+  pointer's on an icon in the dock; anywhere else, it does what it always
+  does. To catch it, the mod watches the keyboard, acting on Ctrl+I (and Esc,
+  to close the card) and keeping nothing.
 
 ## Hot corners
 
@@ -306,6 +389,27 @@ button is held or a full screen app is running.
 - **Bottom right** slides the system tray in. It stays while the pointer is
   over it or a menu it opened, and slides away about half a second after.
   Turned off, the tray is either always shown or always hidden.
+
+## Start and the tray's menus
+
+Start opens in the middle of the screen, fading in as it grows from three
+quarters of its size to its full size. Quick Settings (Wi-Fi, sound and so
+on) and the Notification Center (with the calendar) open at the middle of the
+screen's right edge and slide in from the right. Typing into Start opens
+search in Start's place, where it opens and closes without sliding. Start,
+Quick Settings and the Notification Center have no drop shadow.
+
+- **Start's and search's own animations are off**, Windows' slides among
+  them, as if "Animation effects" were turned off for them alone.
+- **Sliding in from the right** needs Windows 11 version 26H2 (which can move
+  the taskbar to the screen's sides) for Quick Settings. Otherwise it still
+  opens at the middle of the right edge, but slides up as before.
+- **These menus are run by other Windows processes**, so the mod also loads
+  into StartMenuExperienceHost.exe, SearchHost.exe, ShellHost.exe and
+  ShellExperienceHost.exe, only to change them. Turn off "Control Start Menu"
+  or "Control System Tray Menus" to leave Start and search, or the tray's
+  menus, to Windows (or another mod), and the mod stays out of their
+  processes.
 
 ## The system tray
 
@@ -328,6 +432,10 @@ has a few ways to keep them readable. Use any of them, or all:
   shadow under the tray's clock and icons. It's dark under light text and
   light under dark text, unless you give it a color, and its opacity, blur
   and offset can be adjusted.
+
+Quick Settings and the clock open with a click anywhere on them, gaps between
+their icons included, and on the tray's background just above and below
+them. Windows itself only opens them from a click right on an icon.
 
 ![The system tray's hot corner](https://i.imgur.com/qLN8ETY.gif)
 
@@ -356,22 +464,27 @@ apply right away.
   it keeps its shape), magnification (how much icons grow, up to double, and
   how far from the pointer), animation speed and auto-hide.
 - **Dock Color:** the background's color, opacity and blur, an optional
-  brightness limit behind it, and the border's style, opacity, width and
-  color.
+  brightness limit behind it, the border's style, opacity, width and color,
+  and, for the Mac border (the tray's too), a glow or shadow along each side.
 - **Liquid Glass** (off by default): whether the dock's rim bends what's
   behind it and in which style, how deep and strong the bend is, and its own
   blur. Its color is the dock's own.
+- **Squircle Icons:** whether app icons become tiles, the tiles' colors, the
+  icons' vibrance, a sheen, a glow or shadow along each side, the drop
+  shadow, and the corners' style and radius.
 - **Tray Color:** the tray's background (matching the dock, or its own), its
   padding, the brightness limit behind it, and a shadow under its text and
   icons.
 - **Dock Items:** hiding Start, keeping File Explorer first, the Recycle Bin,
   high resolution icons, tooltips, activity indicators, keeping icons still,
-  window previews, dividers, and squircle icons and their tile color.
+  window previews and dividers.
 - **Custom Icons:** your own File Explorer, Start and Recycle Bin icons, and
-  their margins.
+  any other app's, with their margins, and whether they go in squircle tiles.
 - **Hot Corners:** what each bottom corner does.
-- **Additional Settings:** the Mac border's glow (its direction, spread,
-  opacity and color) and the tooltips' color.
+- **Start and Tray Menus:** whether the mod controls Start, and the tray's
+  menus, or leaves them to Windows.
+- **Tooltips:** the app name labels' and Ctrl+I cards' color, font, font
+  size, corner radius and tail, and a glow or shadow along each side.
 
 ## Troubleshooting
 
@@ -391,10 +504,12 @@ maximized", turning off hover previews follows his "Disable Taskbar
 Thumbnails", and placing them follows his "Taskbar on top for Windows 11"
 (all GPL-3.0). Hybrid dots follow notdominicc's way of reshaping Windows' own
 indicators, and moving Task View's row of desktops follows Asteski's "Task
-View Customizer". The squircle corners use PaintCode's measurements of
-Apple's curve. Liquid Glass's edges come from the author's own
-MacOS-Style-LiquidGlass mod; DreY85's Open Fluid Glass (a fork of ALTaleX's
-OpenGlass) showed how a taskbar can be given real refraction.
+View Customizer". Start and the tray's menus are moved as m417z's "Shell
+Flyout Positions" and "Vertical Taskbar for Windows 11" and Asteski's
+"Notification Center Follows Taskbar" move them. The squircle corners use
+PaintCode's measurements of Apple's curve. Liquid Glass's edges come from the
+author's own MacOS-Style-LiquidGlass mod; DreY85's Open Fluid Glass (a fork of
+ALTaleX's OpenGlass) showed how a taskbar can be given real refraction.
 */
 // ==/WindhawkModReadme==
 
@@ -448,7 +563,7 @@ OpenGlass) showed how a taskbar can be given real refraction.
     $description: While Liquid Glass is on, "Liquid Glass Blur" is used instead. (Default = 10)
   - customColor: "#333333"
     $name: Dock Custom Background Color (#HEX)
-    $description: Used when "Background Color" is "Custom."
+    $description: 'Used when "Background Color" is "Custom." (Default = #333333)'
   - capBrightness: true
     $name: Cap Dock Per-Pixel Brightness
     $description: Caps the brightness that shines through the dock on a per-pixel basis. This effect may cause lag. (Default = Enabled)
@@ -471,7 +586,43 @@ OpenGlass) showed how a taskbar can be given real refraction.
     $description: Used when "Border Style" is "Custom" or "Standard." (Default = 1)
   - borderColor: "#FFFFFF"
     $name: Dock Custom Border Color (#HEX)
-    $description: Used when "Border Style" is "Custom."
+    $description: 'Used when "Border Style" is "Custom." (Default = #FFFFFF)'
+  - topGlowColor: ""
+    $name: Dock Top Glow/Shadow Color (#HEX)
+    $description: MacOS Style border only (the tray's too). A glow (with a light color) or shadow (with a dark one) along the top edge, following its corners round. A side with a glow gets a thin light line inside its edge; any other, a faint dark line outside it. Leave blank for a lighter shade of the background color. (Default = Blank)
+  - topGlowOpacity: 9
+    $name: Dock Top Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 9)
+  - topGlowSize: 12
+    $name: Dock Top Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the dock's height. (Default = 12)
+  - bottomGlowColor: ""
+    $name: Dock Bottom Glow/Shadow Color (#HEX)
+    $description: MacOS Style border only (the tray's too). A glow (with a light color) or shadow (with a dark one) along the bottom edge, following its corners round. A side with a glow gets a thin light line inside its edge; any other, a faint dark line outside it. Leave blank for a lighter shade of the background color. (Default = Blank)
+  - bottomGlowOpacity: 9
+    $name: Dock Bottom Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 9)
+  - bottomGlowSize: 12
+    $name: Dock Bottom Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the dock's height. (Default = 12)
+  - leftGlowColor: ""
+    $name: Dock Left Glow/Shadow Color (#HEX)
+    $description: MacOS Style border only (the tray's too). A glow (with a light color) or shadow (with a dark one) along the left edge, following its corners round. A side with a glow gets a thin light line inside its edge; any other, a faint dark line outside it. Leave blank for a lighter shade of the background color. (Default = Blank)
+  - leftGlowOpacity: 0
+    $name: Dock Left Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 0)
+  - leftGlowSize: 12
+    $name: Dock Left Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the dock's height. (Default = 12)
+  - rightGlowColor: ""
+    $name: Dock Right Glow/Shadow Color (#HEX)
+    $description: MacOS Style border only (the tray's too). A glow (with a light color) or shadow (with a dark one) along the right edge, following its corners round. A side with a glow gets a thin light line inside its edge; any other, a faint dark line outside it. Leave blank for a lighter shade of the background color. (Default = Blank)
+  - rightGlowOpacity: 0
+    $name: Dock Right Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 0)
+  - rightGlowSize: 12
+    $name: Dock Right Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the dock's height. (Default = 12)
   $name: Dock Color
 - liquidGlass:
   - edgeStyle: "off"
@@ -492,6 +643,107 @@ OpenGlass) showed how a taskbar can be given real refraction.
     $name: Liquid Glass Blur (0-100)
     $description: Used instead of "Dock Background Blur" while Liquid Glass is on, and for the tray when it matches the dock. Low keeps the bend crisp. (Default = 3)
   $name: Liquid Glass
+- squircleIcons:
+  - enabled: true
+    $name: Squircle Icons
+    $description: Turns app icons into macOS-style tiles. (Default = Enabled)
+  - color: auto
+    $name: Squircle Color
+    $description: (Default = Auto)
+    $options:
+    - alwaysLight: Always Light
+    - preferLight: Prefer Light
+    - auto: Auto
+    - preferDark: Prefer Dark
+    - alwaysDark: Always Dark
+    - custom: Custom
+  - lightColor: "#EEEEEE"
+    $name: Light Squircle Color (#HEX)
+    $description: 'The tile behind an icon that gets a light one. (Default = #EEEEEE)'
+  - darkColor: "#333333"
+    $name: Dark Squircle Color (#HEX)
+    $description: 'The tile behind an icon that gets a dark one. (Default = #333333)'
+  - customColor: "#FFFFFF"
+    $name: Custom Squircle Color (#HEX)
+    $description: 'Used when "Squircle Color" is set to "Custom." (Default = #FFFFFF)'
+  - vibrance: 125
+    $name: Vibrance (0-200)
+    $description: How vivid squircle icons' colors are. At 100 they're the icons' own; above, they get more vivid, the dull ones most; below, they fade toward gray, all the way at 0. (Default = 125)
+  - sheen: true
+    $name: Sheen
+    $description: A soft white sheen over every squircle icon, fading out from the top. (Default = Enabled)
+  - sheenOpacity: 15
+    $name: Sheen Opacity (0-100)
+    $description: (Default = 15)
+  - sheenSize: 50
+    $name: Sheen Size (0-100)
+    $description: How far down it reaches as it fades out, as a percentage of the icon's size. (Default = 50)
+  - topGlowColor: "#FFFFFF"
+    $name: Top Glow/Shadow Color (#HEX)
+    $description: 'A glow (with a light color) or shadow (with a dark one) along the tile''s top edge, following its corners round. (Default = #FFFFFF)'
+  - topGlowOpacity: 25
+    $name: Top Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 25)
+  - topGlowSize: 5
+    $name: Top Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the icon's size. (Default = 5)
+  - bottomGlowColor: "#000000"
+    $name: Bottom Glow/Shadow Color (#HEX)
+    $description: 'A glow (with a light color) or shadow (with a dark one) along the tile''s bottom edge, following its corners round. (Default = #000000)'
+  - bottomGlowOpacity: 10
+    $name: Bottom Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 10)
+  - bottomGlowSize: 10
+    $name: Bottom Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the icon's size. (Default = 10)
+  - leftGlowColor: "#CCCCCC"
+    $name: Left Glow/Shadow Color (#HEX)
+    $description: 'A glow (with a light color) or shadow (with a dark one) along the tile''s left edge, following its corners round. (Default = #CCCCCC)'
+  - leftGlowOpacity: 15
+    $name: Left Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 15)
+  - leftGlowSize: 5
+    $name: Left Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the icon's size. (Default = 5)
+  - rightGlowColor: "#CCCCCC"
+    $name: Right Glow/Shadow Color (#HEX)
+    $description: 'A glow (with a light color) or shadow (with a dark one) along the tile''s right edge, following its corners round. (Default = #CCCCCC)'
+  - rightGlowOpacity: 5
+    $name: Right Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 5)
+  - rightGlowSize: 10
+    $name: Right Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the icon's size. (Default = 10)
+  - shadowSpread: 9
+    $name: Drop Shadow Spread (0-10)
+    $description: How soft the shadow under each tile is; 0 for a sharp one. (Default = 9)
+  - shadowDistance: 9
+    $name: Drop Shadow Distance (0-10)
+    $description: How far the shadow falls from the tile, in its direction. (Default = 9)
+  - shadowOpacity: 26
+    $name: Drop Shadow Opacity (0-100)
+    $description: 0 for no shadow. (Default = 26)
+  - shadowDirection: down
+    $name: Drop Shadow Direction
+    $description: Which way the shadow falls. (Default = Down)
+    $options:
+    - down: Down
+    - downLeft: Down Left
+    - downRight: Down Right
+    - left: Left
+    - right: Right
+    - up: Up
+    - centered: Centered
+  - cornerStyle: squircle
+    $name: Corner Style
+    $description: Squircle is the smooth curve Apple uses, Rounded a plain circular corner. (Default = Squircle)
+    $options:
+    - squircle: Squircle
+    - rounded: Rounded
+  - cornerRadius: 24
+    $name: Corner Radius (0-50)
+    $description: As a percentage of the icon's size. With Rounded corners, 50 makes a circle; Squircle corners stop getting rounder at about 33. (Default = 24)
+  $name: Squircle Icons
 - trayColor:
   - matchDock: true
     $name: Match Dock Style
@@ -510,7 +762,7 @@ OpenGlass) showed how a taskbar can be given real refraction.
     $description: A drop shadow under the tray's clock and icons. (Default = Enabled)
   - shadowColor: ""
     $name: Shadow Color (#HEX)
-    $description: Leave blank for dark under light text, light under dark text.
+    $description: Leave blank for dark under light text, light under dark text. (Default = Blank)
   - shadowOpacity: 60
     $name: Shadow Opacity (0-100)
     $description: (Default = 60)
@@ -540,7 +792,7 @@ OpenGlass) showed how a taskbar can be given real refraction.
     $description: (Default = 10)
   - customColor: "#333333"
     $name: Tray Custom Background Color (#HEX)
-    $description: Used when "Background Color" is "Custom."
+    $description: 'Used when "Background Color" is "Custom." (Default = #333333)'
   - border: mac
     $name: Tray Border Style
     $description: (Default = MacOS Style)
@@ -557,7 +809,7 @@ OpenGlass) showed how a taskbar can be given real refraction.
     $description: Used when "Border Style" is "Custom" or "Standard." (Default = 1)
   - borderColor: "#FFFFFF"
     $name: Tray Custom Border Color (#HEX)
-    $description: Used when "Border Style" is "Custom."
+    $description: 'Used when "Border Style" is "Custom." (Default = #FFFFFF)'
   $name: Tray Color
 - dockItems:
   - hideStart: true
@@ -598,48 +850,53 @@ OpenGlass) showed how a taskbar can be given real refraction.
   - dividers: [0]
     $name: Custom Index Dividers
     $description: Up to 5, each after the icon at that position from the left. (Default = 0)
-  - squircleIcons: true
-    $name: Squircle Icons
-    $description: Turns app icons into macOS-style tiles. (Default = Enabled)
-  - squircleColor: auto
-    $name: Squircle Color
-    $description: (Default = Auto)
-    $options:
-    - alwaysLight: Always Light
-    - preferLight: Prefer Light
-    - auto: Auto
-    - preferDark: Prefer Dark
-    - alwaysDark: Always Dark
-    - custom: Custom
-  - squircleCustomColor: "#FFFFFF"
-    $name: Custom Squircle Color (#HEX)
-    $description: Used when "Squircle Color" is set to "Custom."
   $name: Dock Items
 - customIcons:
   - finderPath: ""
     $name: File Explorer Icon (path)
-    $description: Path to a PNG or ICNS image.
+    $description: Path to a PNG or ICNS image. Leave blank for the usual icon. (Default = Blank)
   - finderMargins: 0
     $name: File Explorer Icon Margins (-50-50)
-    $description: Higher makes the icon smaller. (Default = 0)
+    $description: Higher makes the icon smaller. Not used in a squircle tile. (Default = 0)
+  - finderIgnoreSquircle: false
+    $name: File Explorer Icon Ignores Squircle
+    $description: Shows your image as it is, even with Squircle Icons on. (Default = Disabled)
   - startPath: ""
     $name: Start Menu Icon (path)
-    $description: Path to a PNG or ICNS image. Used when Start isn't hidden.
+    $description: Path to a PNG or ICNS image. Used when Start isn't hidden. Leave blank for the usual icon. (Default = Blank)
   - startMargins: 0
     $name: Start Menu Icon Margins (-50-50)
-    $description: Higher makes the icon smaller. (Default = 0)
+    $description: Higher makes the icon smaller. Not used in a squircle tile. (Default = 0)
+  - startIgnoreSquircle: false
+    $name: Start Menu Icon Ignores Squircle
+    $description: Shows your image as it is, or without one, Windows' own logo rather than the mod's blue tile, even with Squircle Icons on. (Default = Disabled)
   - trashEmptyPath: ""
     $name: Empty Trash Icon (path)
-    $description: Path to a PNG or ICNS image.
+    $description: Path to a PNG or ICNS image. Leave blank for the usual icon. (Default = Blank)
   - trashEmptyMargins: 0
     $name: Empty Trash Icon Margins (-50-50)
     $description: Higher makes the icon smaller. (Default = 0)
   - trashFullPath: ""
     $name: Full Trash Icon (path)
-    $description: Path to a PNG or ICNS image. Blank uses the empty icon.
+    $description: Path to a PNG or ICNS image. Blank uses the empty icon. (Default = Blank)
   - trashFullMargins: 0
     $name: Full Trash Icon Margins (-50-50)
     $description: Higher makes the icon smaller. (Default = 0)
+  - apps:
+    - - app: ""
+        $name: App
+        $description: Hover over the app's icon in the dock and press Ctrl+I to copy its ID, then paste it here. Its name or its .exe (like chrome.exe) works too.
+      - icon: ""
+        $name: Icon (path)
+        $description: Path to a PNG or ICNS image.
+      - margins: 0
+        $name: Icon Margins (-50-50)
+        $description: Higher makes the icon smaller. Not used in a squircle tile. (Default = 0)
+      - ignoreSquircle: false
+        $name: Ignore Squircle
+        $description: Shows the image as it is, even with Squircle Icons on. (Default = Disabled)
+    $name: App Icons
+    $description: Your own icons for any apps in the dock. (Default = None)
   $name: Custom Icons
 - hotCorners:
   - bottomLeft: taskView
@@ -657,27 +914,67 @@ OpenGlass) showed how a taskbar can be given real refraction.
     - hidden: Off and Hidden
     - visible: Off and Visible
   $name: Hot Corners
-- additional:
-  - glowDirection: vertical
-    $name: Dock Glow Direction
-    $description: MacOS Style border only. (Default = Vertical)
-    $options:
-    - vertical: Vertical
-    - horizontal: Horizontal
-    - both: Both
-  - glowSpread: 8
-    $name: Dock Glow Spread (0-20)
-    $description: Adjusts how large the glow is. (Default = 8)
-  - glowOpacity: 63
-    $name: Dock Glow Opacity (0-100)
-    $description: Adjusts how opaque the glow is. (Default = 63)
-  - glowColor: ""
-    $name: Dock Glow Custom Color (#HEX)
-    $description: Leave blank for a lighter shade of the background color.
-  - tooltipColor: ""
-    $name: Tooltip Custom Color (#HEX)
-    $description: Leave blank for light gray.
-  $name: Additional Settings
+- menus:
+  - controlStart: true
+    $name: Control Start Menu
+    $description: Start opens in the middle of the screen, fading in as it grows, without a drop shadow, and search, typed into Start, opens and closes in its place without sliding. Turn off to leave them to Windows or another mod; this mod then stays out of their processes. (Default = Enabled)
+  - controlTray: true
+    $name: Control System Tray Menus
+    $description: Quick Settings and the Notification Center open at the middle of the screen's right edge, sliding in from the right, without drop shadows. Turn off to leave them to Windows or another mod; this mod then stays out of their processes. (Default = Enabled)
+  $name: Start and Tray Menus
+- tooltips:
+  - color: ""
+    $name: Color (#HEX)
+    $description: Leave blank for light gray. (Default = Blank)
+  - font: ""
+    $name: Font
+    $description: The name of a font installed on your computer, as Windows' Fonts settings list it, optionally followed by a weight, such as "Arial" or "Segoe UI Semibold". Or the path to a font file (.ttf, .otf or .ttc). Used by the Ctrl+I info cards too. Leave blank for Segoe UI. (Default = Blank)
+  - fontSize: 14
+    $name: Font Size (8-32)
+    $description: The tooltips grow and shrink to fit. (Default = 14)
+  - cornerRadius: 50
+    $name: Corner Radius (0-50)
+    $description: As a percentage of the tooltip's height; 50 gives fully round ends, as on a Mac. (Default = 50)
+  - tail: true
+    $name: Show Tail
+    $description: The little point under the tooltip, at the icon. (Default = Enabled)
+  - topGlowColor: "#FFFFFF"
+    $name: Top Glow/Shadow Color (#HEX)
+    $description: 'A glow (with a light color) or shadow (with a dark one) along the tooltip''s top edge, following its corners round. (Default = #FFFFFF)'
+  - topGlowOpacity: 25
+    $name: Top Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 25)
+  - topGlowSize: 10
+    $name: Top Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the tooltip's height. (Default = 10)
+  - bottomGlowColor: "#000000"
+    $name: Bottom Glow/Shadow Color (#HEX)
+    $description: 'A glow (with a light color) or shadow (with a dark one) along the tooltip''s bottom edge, following its corners and its tail round. (Default = #000000)'
+  - bottomGlowOpacity: 10
+    $name: Bottom Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 10)
+  - bottomGlowSize: 20
+    $name: Bottom Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the tooltip's height. (Default = 20)
+  - leftGlowColor: "#CCCCCC"
+    $name: Left Glow/Shadow Color (#HEX)
+    $description: 'A glow (with a light color) or shadow (with a dark one) along the tooltip''s left edge, following its corners and its tail round. (Default = #CCCCCC)'
+  - leftGlowOpacity: 15
+    $name: Left Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 15)
+  - leftGlowSize: 10
+    $name: Left Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the tooltip's height. (Default = 10)
+  - rightGlowColor: "#CCCCCC"
+    $name: Right Glow/Shadow Color (#HEX)
+    $description: 'A glow (with a light color) or shadow (with a dark one) along the tooltip''s right edge, following its corners and its tail round. (Default = #CCCCCC)'
+  - rightGlowOpacity: 5
+    $name: Right Glow/Shadow Opacity (0-100)
+    $description: 0 for none. (Default = 5)
+  - rightGlowSize: 20
+    $name: Right Glow/Shadow Size (0-50)
+    $description: How far in it reaches, as a percentage of the tooltip's height. (Default = 20)
+  $name: Tooltips
 */
 // ==/WindhawkModSettings==
 
@@ -686,7 +983,9 @@ OpenGlass) showed how a taskbar can be given real refraction.
 #include <shellapi.h>
 #include <shellscalingapi.h>
 #include <sddl.h>
+#include <commctrl.h>
 #include <d2d1_1.h>
+#include <dwrite_3.h>
 #include <d3d11.h>
 #include <dwmapi.h>
 #include <dxgi1_2.h>
@@ -694,7 +993,10 @@ OpenGlass) showed how a taskbar can be given real refraction.
 #include <shcore.h>
 #include <shlobj.h>
 #include <shobjidl.h>
+#include <appmodel.h>
+#include <roapi.h>
 #include <wincodec.h>
+#include <winstring.h>
 
 #include <algorithm>
 #include <array>
@@ -708,6 +1010,7 @@ OpenGlass) showed how a taskbar can be given real refraction.
 #include <iterator>
 #include <limits>
 #include <list>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <numeric>
@@ -716,6 +1019,7 @@ OpenGlass) showed how a taskbar can be given real refraction.
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -733,6 +1037,7 @@ OpenGlass) showed how a taskbar can be given real refraction.
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.h>
 #include <winrt/Windows.UI.Composition.h>
+#include <winrt/Windows.UI.Core.h>
 #include <winrt/Windows.UI.Input.h>
 #include <winrt/Windows.UI.Xaml.h>
 #include <winrt/Windows.UI.Xaml.Automation.h>
@@ -742,6 +1047,7 @@ OpenGlass) showed how a taskbar can be given real refraction.
 #include <winrt/Windows.UI.Xaml.Hosting.h>
 #include <winrt/Windows.UI.Xaml.Input.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
+#include <winrt/Windows.UI.Xaml.Media.Animation.h>
 #include <winrt/Windows.UI.Xaml.Media.Imaging.h>
 #include <winrt/Windows.UI.Xaml.Shapes.h>
 
@@ -771,14 +1077,33 @@ enum class Border { Mac, Standard, Custom, None };
 enum class LeftCorner { TaskView, Start, Off };
 enum class Show { HotCorner, Hidden, Visible };  // the system tray
 enum class AutoHide { Hybrid, On, Off };
-enum class GlowEdges { TopBottom, Sides, All };
 // Behind squircle icons' shapes.
 enum class TileColor { AlwaysLight, PreferLight, Auto, PreferDark, AlwaysDark, Custom };
+enum class ShadowDirection { Down, DownLeft, DownRight, Left, Right, Up, Centered };
+enum class CornerStyle { Squircle, Rounded };
+
+// The dock's glow or shadow along one side (see MAC BORDER): as a tile's, but
+// sized by the dock's height, and blank gives a lighter shade of its color.
+struct DockEdge {
+    bool lighter = true;  // a lighter shade of the background color, not `color`
+    uint8_t color[3] = {};
+    int opacity = 0;  // percent
+    int size = 0;     // how far in it reaches, as a percent of the dock's height
+};
+
+// A tile's glow or shadow along one side, fading in from its edge.
+struct TileEdge {
+    uint8_t color[3] = {};
+    int opacity = 0;  // percent
+    int size = 0;     // how far in it reaches, as a percent of the tile
+    bool operator==(TileEdge const&) const = default;
+};
 enum class Indicators { Dots, HybridDots, Windows, None };  // running apps
 enum class GlassStyle { Lens, Reflection, Stretch, Off };  // how Liquid Glass bends the rim
 
 constexpr float kMacIconScale = 1024.0f / 824;  // macOS icons fill 824 of 1024px, for shadows
 constexpr size_t kMaxCustomDividers = 5;
+constexpr int kMaxAppIcons = 100;  // in "App Icons"
 
 // The user's own Finder, Start or Trash icon. None while `path` is empty.
 struct CustomIcon {
@@ -786,6 +1111,14 @@ struct CustomIcon {
     float size = 1;               // the artwork, of the icon size
     float scale = 1;              // the image, of the icon size, margin included
     float fullSize = 1, fullScale = 1;  // the same for fullPath's image
+    bool ignoreSquircle = false;        // shown as it is, not in a squircle tile
+};
+
+// The user's own icon for an app, in "App Icons".
+struct AppIcon {
+    std::wstring app;  // as typed: its ID, its name, or its .exe
+    bool exe = false;  // `app` is an .exe: a file name, or a full path
+    CustomIcon icon;
 };
 
 // A background like the dock's: the dock's own, or the tray's.
@@ -836,16 +1169,32 @@ struct Settings {
     bool keepIconsStill;  // no bounce as apps open, close, minimize or are restored
     TileColor tileColor;
     uint8_t tileCustomColor[3];
+    uint8_t tileLightColor[3], tileDarkColor[3];  // the tiles Light and Dark give
+    int tileVibrance;  // 0-200, 100 for the icons' own colors
+    bool tileSheen;
+    int tileSheenOpacity;  // percent
+    int tileSheenSize;     // how far down it reaches, as a percent of the tile
+    std::array<TileEdge, 4> tileEdges;  // top, bottom, left, right
+    int tileShadowSpread;               // 0-10, how soft
+    int tileShadowDistance;             // 0-10, how far it falls
+    int tileShadowOpacity;              // percent
+    ShadowDirection tileShadowDirection;
+    CornerStyle tileCorner;
+    int tileCornerRadius;  // percent of the tile
     CustomIcon customFinder, customStart, customTrash;
+    std::vector<AppIcon> appIcons;
     LeftCorner leftCorner;
     Show tray;
-    GlowEdges glowEdges;
-    float glowSize;
-    float glowOpacity;
-    bool glowCustom;
-    uint8_t glowColor[3];
+    std::array<DockEdge, 4> dockEdges;  // top, bottom, left, right
     uint8_t tooltipColor[3];
+    std::wstring tooltipFont;  // as typed; empty for Segoe UI
+    int tooltipFontSize;       // 8-32, in view pixels
+    int tooltipRadius;         // 0-50, percent of the tooltip's height
+    bool tooltipTail;
+    // Top, bottom, left, right, as tiles' but sized by the tooltip's height.
+    std::array<TileEdge, 4> tooltipEdges;
 } g_settings;
+int g_settingsVersion = 0;  // counts loads, for what's measured once per look
 
 // The tray's background: its own, or the dock's.
 Look const& TrayLook() {
@@ -878,19 +1227,34 @@ int ChoiceSetting(PCWSTR name, std::initializer_list<PCWSTR> options, int fallba
     return fallback;
 }
 
-// A file's path from a string setting, as typed or copied: surrounding quotes
-// and %VARIABLES% are fine. Empty if there's no file there.
-std::wstring PathSetting(PCWSTR name) {
+// A string setting without the spaces and quotes around it, as when copied.
+std::wstring TrimmedSetting(PCWSTR name) {
     auto value = WindhawkUtils::StringSetting::make(name);
     std::wstring_view text = value ? (PCWSTR)value : L"";
     auto trimmed = [](wchar_t c) { return iswspace(c) || c == L'"'; };
     while (!text.empty() && trimmed(text.front())) text.remove_prefix(1);
     while (!text.empty() && trimmed(text.back())) text.remove_suffix(1);
+    return std::wstring(text);
+}
+
+bool EndsWithNoCase(std::wstring_view text, std::wstring_view end) {
+    return text.size() >= end.size() &&
+           !_wcsnicmp(text.data() + text.size() - end.size(), end.data(), end.size());
+}
+
+// %VARIABLES% in `text` filled in.
+std::wstring ExpandVariables(std::wstring const& text) {
+    std::wstring path(ExpandEnvironmentStringsW(text.c_str(), nullptr, 0), L'\0');
+    DWORD length = ExpandEnvironmentStringsW(text.c_str(), path.data(), (DWORD)path.size());
+    return length && length <= path.size() ? path.substr(0, length - 1) : text;
+}
+
+// A file's path from a string setting, as typed or copied: surrounding quotes
+// and %VARIABLES% are fine. Empty if there's no file there.
+std::wstring PathSetting(PCWSTR name) {
+    std::wstring text = TrimmedSetting(name);
     if (text.empty()) return {};
-    std::wstring raw(text);
-    std::wstring path(ExpandEnvironmentStringsW(raw.c_str(), nullptr, 0), L'\0');
-    DWORD length = ExpandEnvironmentStringsW(raw.c_str(), path.data(), (DWORD)path.size());
-    path = length && length <= path.size() ? path.substr(0, length - 1) : raw;
+    std::wstring path = ExpandVariables(text);
     DWORD attributes = GetFileAttributesW(path.c_str());
     if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
         Wh_Log(L"No file at %s", path.c_str());
@@ -1009,34 +1373,106 @@ void LoadSettings() {
     std::sort(s.customDividers.begin(), s.customDividers.end());
     s.customDividers.erase(std::unique(s.customDividers.begin(), s.customDividers.end()),
                            s.customDividers.end());
-    s.squircleIcons = Wh_GetIntSetting(L"dockItems.squircleIcons");
     s.keepIconsStill = Wh_GetIntSetting(L"dockItems.keepIconsStill");
+
+    s.squircleIcons = Wh_GetIntSetting(L"squircleIcons.enabled");
     s.tileColor = (TileColor)ChoiceSetting(
-        L"dockItems.squircleColor",
+        L"squircleIcons.color",
         {L"alwaysLight", L"preferLight", L"auto", L"preferDark", L"alwaysDark", L"custom"}, 2);
     if (s.tileColor == TileColor::Custom &&
-        !HexSetting(L"dockItems.squircleCustomColor", s.tileCustomColor)) {
+        !HexSetting(L"squircleIcons.customColor", s.tileCustomColor)) {
         s.tileColor = TileColor::Auto;
     }
+    if (!HexSetting(L"squircleIcons.lightColor", s.tileLightColor)) {
+        s.tileLightColor[0] = s.tileLightColor[1] = s.tileLightColor[2] = 0xEE;
+    }
+    if (!HexSetting(L"squircleIcons.darkColor", s.tileDarkColor)) {
+        s.tileDarkColor[0] = s.tileDarkColor[1] = s.tileDarkColor[2] = 0x33;
+    }
+    s.tileVibrance = std::clamp(Wh_GetIntSetting(L"squircleIcons.vibrance"), 0, 200);
+    s.tileSheen = Wh_GetIntSetting(L"squircleIcons.sheen");
+    s.tileSheenOpacity = percent(L"squircleIcons.sheenOpacity");
+    s.tileSheenSize = percent(L"squircleIcons.sheenSize");
+    const PCWSTR sides[] = {L"top", L"bottom", L"left", L"right"};
+    const uint8_t defaultLevels[] = {0xFF, 0x00, 0xCC, 0xCC};  // the default colors' grays
+    for (size_t i = 0; i < s.tileEdges.size(); i++) {
+        auto name = [&](PCWSTR suffix) {
+            return std::wstring(L"squircleIcons.") + sides[i] + L"Glow" + suffix;
+        };
+        TileEdge& edge = s.tileEdges[i];
+        edge.opacity = percent(name(L"Opacity").c_str());
+        edge.size = std::clamp(Wh_GetIntSetting(name(L"Size").c_str()), 0, 50);
+        if (!HexSetting(name(L"Color").c_str(), edge.color)) {
+            edge.color[0] = edge.color[1] = edge.color[2] = defaultLevels[i];
+        }
+    }
+    s.tileShadowSpread = std::clamp(Wh_GetIntSetting(L"squircleIcons.shadowSpread"), 0, 10);
+    s.tileShadowDistance = std::clamp(Wh_GetIntSetting(L"squircleIcons.shadowDistance"), 0, 10);
+    s.tileShadowOpacity = percent(L"squircleIcons.shadowOpacity");
+    s.tileShadowDirection = (ShadowDirection)ChoiceSetting(
+        L"squircleIcons.shadowDirection",
+        {L"down", L"downLeft", L"downRight", L"left", L"right", L"up", L"centered"}, 0);
+    s.tileCorner =
+        (CornerStyle)ChoiceSetting(L"squircleIcons.cornerStyle", {L"squircle", L"rounded"}, 0);
+    s.tileCornerRadius = std::clamp(Wh_GetIntSetting(L"squircleIcons.cornerRadius"), 0, 50);
 
     s.customFinder = CustomIconSetting(L"customIcons.finderPath", L"customIcons.finderMargins");
+    s.customFinder.ignoreSquircle = Wh_GetIntSetting(L"customIcons.finderIgnoreSquircle");
     s.customStart = CustomIconSetting(L"customIcons.startPath", L"customIcons.startMargins");
+    s.customStart.ignoreSquircle = Wh_GetIntSetting(L"customIcons.startIgnoreSquircle");
     s.customTrash =
         CustomIconSetting(L"customIcons.trashEmptyPath", L"customIcons.trashEmptyMargins",
                           L"customIcons.trashFullPath", L"customIcons.trashFullMargins");
+    s.appIcons.clear();
+    for (int i = 0; i < kMaxAppIcons; i++) {
+        std::wstring key = L"customIcons.apps[" + std::to_wstring(i) + L"].";
+        std::wstring app = TrimmedSetting((key + L"app").c_str());
+        // The list ends at its first blank entry.
+        if (app.empty() && TrimmedSetting((key + L"icon").c_str()).empty()) break;
+        AppIcon entry;
+        entry.icon = CustomIconSetting((key + L"icon").c_str(), (key + L"margins").c_str());
+        if (app.empty() || entry.icon.path.empty()) continue;
+        entry.exe = EndsWithNoCase(app, L".exe");
+        entry.app = entry.exe && app.find(L'\\') != app.npos ? ExpandVariables(app) : app;
+        entry.icon.ignoreSquircle = Wh_GetIntSetting((key + L"ignoreSquircle").c_str());
+        s.appIcons.push_back(std::move(entry));
+    }
 
     s.leftCorner = (LeftCorner)ChoiceSetting(L"hotCorners.bottomLeft",
                                              {L"taskView", L"start", L"off"}, 0);
     s.tray = (Show)ChoiceSetting(L"hotCorners.bottomRight", {L"tray", L"hidden", L"visible"}, 0);
 
-    s.glowEdges = (GlowEdges)ChoiceSetting(L"additional.glowDirection",
-                                           {L"vertical", L"horizontal", L"both"}, 0);
-    s.glowSize = std::clamp(Wh_GetIntSetting(L"additional.glowSpread"), 0, 20);
-    s.glowOpacity = percent(L"additional.glowOpacity") / 100.0f;
-    s.glowCustom = HexSetting(L"additional.glowColor", s.glowColor);
-    if (!HexSetting(L"additional.tooltipColor", s.tooltipColor)) {
+    for (size_t i = 0; i < s.dockEdges.size(); i++) {
+        auto name = [&](PCWSTR suffix) {
+            return std::wstring(L"dockColor.") + sides[i] + L"Glow" + suffix;
+        };
+        DockEdge& edge = s.dockEdges[i];
+        edge.lighter = !HexSetting(name(L"Color").c_str(), edge.color);
+        edge.opacity = percent(name(L"Opacity").c_str());
+        edge.size = std::clamp(Wh_GetIntSetting(name(L"Size").c_str()), 0, 50);
+    }
+    // The color was in Additional Settings in earlier versions: kept from there.
+    if (!HexSetting(L"tooltips.color", s.tooltipColor) &&
+        !HexSetting(L"additional.tooltipColor", s.tooltipColor)) {
         std::fill(std::begin(s.tooltipColor), std::end(s.tooltipColor), 0xBF);
     }
+    s.tooltipFont = TrimmedSetting(L"tooltips.font");
+    s.tooltipFontSize = std::clamp(Wh_GetIntSetting(L"tooltips.fontSize"), 8, 32);
+    s.tooltipRadius = std::clamp(Wh_GetIntSetting(L"tooltips.cornerRadius"), 0, 50);
+    s.tooltipTail = Wh_GetIntSetting(L"tooltips.tail");
+    for (size_t i = 0; i < s.tooltipEdges.size(); i++) {
+        auto name = [&](PCWSTR suffix) {
+            return std::wstring(L"tooltips.") + sides[i] + L"Glow" + suffix;
+        };
+        TileEdge& edge = s.tooltipEdges[i];
+        edge.opacity = percent(name(L"Opacity").c_str());
+        edge.size = std::clamp(Wh_GetIntSetting(name(L"Size").c_str()), 0, 50);
+        // Blank gives the same color as squircle icons' default.
+        if (!HexSetting(name(L"Color").c_str(), edge.color)) {
+            edge.color[0] = edge.color[1] = edge.color[2] = defaultLevels[i];
+        }
+    }
+    g_settingsVersion++;
 
     ComputeSizes();
 }
@@ -1234,12 +1670,15 @@ void SetTranslation(wux::UIElement const& el, float x, float y = 0) {
 }
 
 // Runs f, swallowing (and optionally logging) errors: the taskbar must keep running.
+// False if it failed.
 template <typename F>
-void Try(F&& f, PCWSTR what = nullptr) {
+bool Try(F&& f, PCWSTR what = nullptr) {
     try {
         f();
+        return true;
     } catch (...) {
         if (what) Wh_Log(L"%s failed: 0x%08X", what, winrt::to_hresult());
+        return false;
     }
 }
 
@@ -1504,10 +1943,10 @@ std::vector<BYTE> ReadIcnsFile(std::wstring const& path) {
 }
 
 // An image file (PNG, .icns, or any format Windows reads), scaled to `px` on its
-// longer side, decoded synchronously (XAML's own decoding is asynchronous).
-wuxm::ImageSource LoadImageFile(std::wstring const& path, int px) {
-    if (path.empty() || px <= 0) return nullptr;
-    wuxm::ImageSource result{nullptr};
+// longer side, as premultiplied BGRA, top row first; empty if it can't be read.
+std::vector<BYTE> LoadImagePixels(std::wstring const& path, int px, int& w, int& h) {
+    std::vector<BYTE> result;
+    if (path.empty() || px <= 0) return result;
     Try([&] {
         using winrt::check_hresult;
         winrt::com_ptr<IWICImagingFactory> factory;
@@ -1578,8 +2017,19 @@ wuxm::ImageSource LoadImageFile(std::wstring const& path, int px) {
         }
         std::vector<BYTE> pixels((size_t)outWidth * outHeight * 4);
         check_hresult(scaler->CopyPixels(nullptr, outWidth * 4, (UINT)pixels.size(), pixels.data()));
-        result = BitmapFromPixels(outWidth, outHeight, pixels);
+        w = (int)outWidth;
+        h = (int)outHeight;
+        result = std::move(pixels);
     }, L"Icon image");
+    return result;
+}
+
+// The same, decoded synchronously (XAML's own decoding is asynchronous).
+wuxm::ImageSource LoadImageFile(std::wstring const& path, int px) {
+    int w = 0, h = 0;
+    auto pixels = LoadImagePixels(path, px, w, h);
+    wuxm::ImageSource result{nullptr};
+    if (!pixels.empty()) Try([&] { result = BitmapFromPixels(w, h, pixels); }, L"Icon image");
     return result;
 }
 
@@ -1599,6 +2049,25 @@ int MagnifiedPixels(wux::UIElement const& el, float scale) {
 
 bool HasFinderIcon() { return !g_settings.customFinder.path.empty(); }
 bool HasStartIcon() { return !g_settings.customStart.path.empty(); }
+
+// With Squircle Icons on, File Explorer's, Start's and other apps' own icons go
+// in tiles, as the apps' icons do, unless set to ignore them. Their margins
+// don't apply there: a tile's made from what's shown of the image, whatever
+// space is around it.
+bool Squircled(CustomIcon const& icon) {
+    return g_settings.squircleIcons && !icon.ignoreSquircle;
+}
+
+// The image's size, of the icon size: a tile's, or the image's with its margins.
+float CustomIconScale(CustomIcon const& icon) {
+    return Squircled(icon) ? kMacIconScale : icon.scale;
+}
+
+// Start shows an icon of the mod's in the dock: the user's, or with Squircle
+// Icons on, a tile of its own (see StartTile). Otherwise, Windows' logo.
+bool ModStartIcon() {
+    return !g_settings.hideStart && (HasStartIcon() || Squircled(g_settings.customStart));
+}
 bool HasTrashIcon() { return !g_settings.customTrash.path.empty(); }
 
 // The bin's image, of the icon size: the empty one's, or the full one's.
@@ -1874,15 +2343,13 @@ void HideBackground(wux::FrameworkElement const& el) {
 // Behind each taskbar's icons: blur, color and edge, layered in a grid.
 
 constexpr float kMaxBlur = 60;                  // Blur 50 = 30, like Windows' acrylic
-constexpr float kEdgeHighlight = 0.7f;          // top and bottom edge: this far to white
-constexpr float kEdgeShadow = 0.7f;             // side edges: this far to black
+constexpr float kEdgeHighlight = 0.7f;          // a light edge, and blank glows: this far to white
+constexpr float kEdgeShadow = 0.7f;             // a dark edge: this far to black
 constexpr float kDividerOpacity = 0.75f;        // of the dots' opacity
-constexpr float kEdgeHighlightOpacity = 0.5f;   // top and bottom edge, of the edges' opacity
+constexpr float kEdgeHighlightOpacity = 0.5f;   // a light edge, of the edges' opacity
 constexpr float kEdgeMinOpacity = 0.20f;        // edge opacity at dock Opacity 0...
 constexpr float kEdgeMaxOpacity = 0.65f;        // ...rising to this at kEdgeMaxOpacityAt
 constexpr int kEdgeMaxOpacityAt = 30;
-constexpr int kGlowSteps = 10;                  // gradient stops per glowing edge
-constexpr float kGlowFalloff = 4.5f;            // Gaussian: e^(-k t^2) over the reach
 constexpr float kMarkDarkLightness = 0.05f;   // dividers and dots on a light dock
 constexpr float kMarkLightLightness = 0.9f;   // dividers and dots on a dark dock
 constexpr uint8_t kMarkAlphaOnLight = 200;
@@ -1903,28 +2370,6 @@ float Lightness(Color color) {
 
 // `color` with its HSL lightness moved by `delta`.
 Color ShiftLightness(Color color, float delta);
-
-// The Mac edge's inner glow, lighter than `fill`, at `strength` of its opacity.
-Color GlowColor(Color fill, float strength) {
-    Color glow = ShiftLightness(fill, (1 - Lightness(fill)) * kEdgeHighlight);
-    glow.A = (uint8_t)std::min(255L, std::lround(fill.A * strength));
-    return glow;
-}
-
-// Gradient stops for an inner glow from both ends, `reach` deep, as (offset,
-// strength) in order. Strength falls off as a half Gaussian, reaching 0 at the
-// reach, so the glow fades out with no visible edge.
-std::array<std::pair<float, float>, kGlowSteps * 2> GlowStops(float reach) {
-    std::array<std::pair<float, float>, kGlowSteps * 2> stops;
-    float end = std::exp(-kGlowFalloff);
-    for (int i = 0; i < kGlowSteps; i++) {
-        float t = i / (kGlowSteps - 1.0f);
-        float strength = (std::exp(-kGlowFalloff * t * t) - end) / (1 - end);
-        stops[i] = {reach * t, strength};
-        stops[kGlowSteps * 2 - 1 - i] = {1 - reach * t, strength};
-    }
-    return stops;
-}
 
 // `color` with its HSL lightness moved by `delta`.
 Color ShiftLightness(Color color, float delta) {
@@ -2206,14 +2651,19 @@ winrt::com_ptr<ID2D1PathGeometry> SquircleD2D(ID2D1Factory* factory,
     return path;
 }
 
-// The same outline for composition, which takes it through Direct2D.
-wuc::CompositionPath SquirclePath(std::vector<wf::Point> const& points) {
+// Direct2D's factory, made the first time it's needed.
+ID2D1Factory* D2DFactory() {
     if (!g_d2d) {
         winrt::check_hresult(D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED,
                                                __uuidof(ID2D1Factory), nullptr, g_d2d.put_void()));
     }
+    return g_d2d.get();
+}
+
+// The same outline for composition, which takes it through Direct2D.
+wuc::CompositionPath SquirclePath(std::vector<wf::Point> const& points) {
     auto source = winrt::make_self<GeometrySource>();
-    source->geometry = SquircleD2D(g_d2d.get(), points);
+    source->geometry = SquircleD2D(D2DFactory(), points);
     return wuc::CompositionPath(source.as<wg::IGeometrySource2D>());
 }
 
@@ -2286,15 +2736,22 @@ wuc::CompositionPathGeometry SetBlurVisual(wux::UIElement const& host, float amo
 }
 
 // ---- Surface ----
-// A background like the dock's, as layers in a grid: blur, color, glow and
-// edges. The dock's plate has one, and so does the tray.
+// A background like the dock's, as layers in a grid: blur, color, and a border:
+// a line, or the MacOS Style border's lines and glows. The dock's plate has
+// one, and so does the tray.
 
 struct Surface {
     wuxc::Grid root{nullptr};
     wuxc::Border blurHost{nullptr};
     wuxs::Path fill{nullptr}, edgeInner{nullptr}, edgeOuter{nullptr};
-    wuxs::Path topGlow{nullptr}, sideGlow{nullptr};  // in from the top and bottom, and the sides
-    wuxm::LinearGradientBrush topGlowBrush{nullptr}, sideGlowBrush{nullptr};
+    // The MacOS Style border, drawn as a picture in three slices (see MAC
+    // BORDER): its ends, and its middle stretched between them.
+    wuxc::Grid mac{nullptr};
+    wuxc::Image macLeft{nullptr}, macMiddle{nullptr}, macRight{nullptr};
+    bool macShown = false;
+    Color macFill{};               // the background it's drawn for
+    uint8_t macLineAlpha = 0;      // its dark lines'; the light ones are half
+    std::wstring macDrawn;         // what it was last drawn for
     wuc::CompositionPathGeometry blurShape{nullptr};
     float appliedBlur = -1;
     ToneLimit appliedTone;
@@ -2310,14 +2767,31 @@ void BuildSurface(Surface& s) {
     s.root = wuxc::Grid();
     s.blurHost = wuxc::Border();
     s.fill = wuxs::Path();
-    s.topGlow = wuxs::Path();
-    s.sideGlow = wuxs::Path();
     s.edgeInner = wuxs::Path();
     s.edgeOuter = wuxs::Path();
     s.root.IsHitTestVisible(false);
     s.root.UseLayoutRounding(false);
+
+    s.mac = wuxc::Grid();
+    s.mac.Visibility(Visibility::Collapsed);
+    for (auto width : {wux::GridLengthHelper::Auto(), wux::GridLengthHelper::FromValueAndType(
+                                                          1, wux::GridUnitType::Star),
+                       wux::GridLengthHelper::Auto()}) {
+        wuxc::ColumnDefinition column;
+        column.Width(width);
+        s.mac.ColumnDefinitions().Append(column);
+    }
+    int i = 0;
+    for (auto* image : {&s.macLeft, &s.macMiddle, &s.macRight}) {
+        *image = wuxc::Image();
+        image->Stretch(wuxm::Stretch::Fill);
+        image->UseLayoutRounding(false);
+        wuxc::Grid::SetColumn(*image, i++);
+        s.mac.Children().Append(*image);
+    }
+
     for (wux::FrameworkElement layer : std::initializer_list<wux::FrameworkElement>{
-             s.blurHost, s.fill, s.topGlow, s.sideGlow, s.edgeInner, s.edgeOuter}) {
+             s.blurHost, s.fill, s.mac, s.edgeInner, s.edgeOuter}) {
         layer.UseLayoutRounding(false);
         s.root.Children().Append(layer);
     }
@@ -2358,22 +2832,6 @@ Color MarkColor(Color fill, bool light) {
     return mark;
 }
 
-// A glow in `color` fading in from both ends along `end`: (0, 1) for the top
-// and bottom, (1, 0) for the sides. ShapeSurface sets its depth.
-wuxm::LinearGradientBrush GlowBrush(Color color, wf::Point end) {
-    wuxm::LinearGradientBrush brush;
-    brush.StartPoint({0, 0});
-    brush.EndPoint(end);
-    for (auto [offset, strength] : GlowStops(0)) {
-        Color stopColor = color;
-        stopColor.A = (uint8_t)std::lround(color.A * strength);
-        wuxm::GradientStop stop;
-        stop.Color(stopColor);
-        brush.GradientStops().Append(stop);
-    }
-    return brush;
-}
-
 // Frosted glass, in `fill` (from LookFill), with `look`'s border; what's seen
 // through it held within `tone`.
 void ApplySurfaceLook(Surface& s, Look const& look, Color fill, bool light,
@@ -2382,8 +2840,8 @@ void ApplySurfaceLook(Surface& s, Look const& look, Color fill, bool light,
     s.fill.Fill(none ? nullptr : wuxm::SolidColorBrush(fill));
     s.edgeInner.Fill(nullptr);
     s.edgeOuter.Fill(nullptr);
-    s.topGlowBrush = nullptr;
-    s.sideGlowBrush = nullptr;
+    s.macShown = look.border == Border::Mac;
+    s.mac.Visibility(s.macShown ? Visibility::Visible : Visibility::Collapsed);
     auto scaled = [](uint8_t alpha, int percent) {
         return (uint8_t)std::lround(alpha * percent / 100.0f);
     };
@@ -2398,29 +2856,13 @@ void ApplySurfaceLook(Surface& s, Look const& look, Color fill, bool light,
         auto [r, g, b] = look.borderColor;
         s.edgeInner.Fill(wuxm::SolidColorBrush(Color{scaled(255, look.borderOpacity), r, g, b}));
     } else if (look.border == Border::Mac) {
-        // Lighter top and bottom (or sides, or all four), glowing inward; any
-        // other two darker. Each fades out around the corners.
-        Color lighter = ShiftLightness(fill, (1 - Lightness(fill)) * kEdgeHighlight);
-        Color darker = ShiftLightness(fill, -Lightness(fill) * kEdgeShadow);
+        // Drawn as the surface is shaped (see MAC BORDER), its lines stronger
+        // on a more opaque background.
         float t = std::clamp((float)look.opacity / kEdgeMaxOpacityAt, 0.0f, 1.0f);
-        uint8_t edgeAlpha =
+        s.macLineAlpha =
             (uint8_t)std::lround(255 * (kEdgeMinOpacity + (kEdgeMaxOpacity - kEdgeMinOpacity) * t));
-        lighter.A = (uint8_t)std::lround(edgeAlpha * kEdgeHighlightOpacity);
-        darker.A = edgeAlpha;
-        s.edgeInner.Fill(wuxm::SolidColorBrush(lighter));
-        s.edgeOuter.Fill(wuxm::SolidColorBrush(darker));
-
-        auto& set = g_settings;
-        Color glowStart = GlowColor(fill, set.glowOpacity);
-        if (set.glowCustom) {
-            auto [r, g, b] = set.glowColor;
-            glowStart = Color{glowStart.A, r, g, b};
-        }
-        if (set.glowEdges != GlowEdges::Sides) s.topGlowBrush = GlowBrush(glowStart, {0, 1});
-        if (set.glowEdges != GlowEdges::TopBottom) s.sideGlowBrush = GlowBrush(glowStart, {1, 0});
+        s.macFill = fill;
     }
-    s.topGlow.Fill(s.topGlowBrush);
-    s.sideGlow.Fill(s.sideGlowBrush);
 
     float blur = none ? 0 : look.blur * kMaxBlur / 100;
     if (s.glassShown) return;  // Liquid Glass is in its place
@@ -2432,21 +2874,18 @@ void ApplySurfaceLook(Surface& s, Look const& look, Color fill, bool light,
     }
 }
 
-// The squircle at `w` x `h` with corners up to `r`, its edges, and the glow
-// `glow` pixels deep from its light edges.
-void ShapeSurface(Surface& s, Look const& look, float w, float h, float r, float glow) {
+void DrawMacBorder(Surface& s, float w, float h, float r, float reference);
+
+// The squircle at `w` x `h` with corners up to `r`, and its border. The
+// MacOS Style border's glows are sized by `reference`, a height.
+void ShapeSurface(Surface& s, Look const& look, float w, float h, float r, float reference) {
     if (!s.root || w <= 0 || h <= 0) return;
     r = SquircleRadius(w, h, r);
-    float in = std::max(0.0f, r - 1);
     auto outline = Squircle(0, 0, w, h, r, r);
 
     s.fill.Data(SquircleGeometry({outline}));
-    s.topGlow.Data(SquircleGeometry({outline}));
-    s.sideGlow.Data(SquircleGeometry({outline}));
     s.edgeInner.Data(nullptr);
     s.edgeOuter.Data(nullptr);
-    bool mac = look.border == Border::Mac;
-    auto edges = g_settings.glowEdges;
     if (look.border == Border::Standard || look.border == Border::Custom) {
         // A line inside all four sides, as wide as set.
         float width = std::min((float)look.borderWidth, std::min(w, h) / 2);
@@ -2455,33 +2894,11 @@ void ShapeSurface(Surface& s, Look const& look, float w, float h, float r, float
             s.edgeInner.Data(SquircleGeometry(
                 {outline, Squircle(width, width, w - 2 * width, h - 2 * width, inner, inner)}));
         }
-    } else if (mac && edges == GlowEdges::All) {
-        s.edgeInner.Data(SquircleGeometry({outline, Squircle(1, 1, w - 2, h - 2, in, in)}));
-    } else if (mac && edges == GlowEdges::TopBottom) {
-        // A light line inside the top and bottom; a dark one outside the sides,
-        // laid out 1px wider each side.
-        s.edgeInner.Data(SquircleGeometry({outline, Squircle(0, 1, w, h - 2, r, in)}));
-        s.edgeOuter.Margin({-1, 0, -1, 0});
-        s.edgeOuter.Data(SquircleGeometry({Squircle(0, 0, w + 2, h, r + 1, r),
-                                           Squircle(1, 0, w, h, r, r)}));
-    } else if (mac) {
-        s.edgeInner.Data(SquircleGeometry({outline, Squircle(1, 0, w - 2, h, in, r)}));
-        s.edgeOuter.Margin({0, -1, 0, -1});
-        s.edgeOuter.Data(SquircleGeometry({Squircle(0, 0, w, h + 2, r, r + 1),
-                                           Squircle(0, 1, w, h, r, r)}));
+    } else if (look.border == Border::Mac) {
+        Try([&] { DrawMacBorder(s, w, h, r, reference); }, L"Mac border");
     }
     if (s.blurShape) Try([&] { s.blurShape.Path(SquirclePath(outline)); }, L"Blur shape");
     if (s.glassShape) Try([&] { s.glassShape.Path(SquirclePath(outline)); }, L"Glass shape");
-
-    // The same depth in pixels from every glowing edge.
-    for (auto [brush, extent] : {std::pair{s.topGlowBrush, h}, std::pair{s.sideGlowBrush, w}}) {
-        if (!brush) continue;
-        auto stops = brush.GradientStops();
-        uint32_t i = 0;
-        for (auto [offset, strength] : GlowStops(std::clamp(glow / extent, 0.0f, 0.5f))) {
-            stops.GetAt(i++).Offset(offset);
-        }
-    }
 }
 
 // ---- Plate ----
@@ -2581,7 +2998,7 @@ void ColorDots(Plate& p);
 void ShapePlate(Plate& p) {
     float w = p.width > 0 ? p.width : p.baseWidth;
     ShapeSurface(p.surface, g_settings.dockLook, w, g_size.dockHeight, g_size.dockRadius,
-                 g_settings.glowSize * g_size.icon / kDefaultIconSize);
+                 g_size.dockHeight);
 }
 
 bool SystemIsLight(wux::FrameworkElement const& el) {
@@ -2643,13 +3060,16 @@ wuxc::Border AddDivider(wuxc::Panel const& panel, wux::UIElement const& row) {
 // =============================================================================
 // APP ICONS
 // =============================================================================
-// File Explorer can show the user's own icon, and every app a squircle tile,
-// as on a Mac. The taskbar reuses buttons and sets new icons, so
+// File Explorer and any other app can show the user's own icon, and every app a
+// squircle tile, as on a Mac. The taskbar reuses buttons and sets new icons, so
 // a replacement follows along, keeping the taskbar's own icon to put back. Both
 // are drawn bigger than their box, so their artwork matches other icons and
 // their shadows spill past.
 
-enum class IconLook { Stock, Finder, Squircle };
+// Custom: the user's own icon for the app, from "App Icons". Plain: the
+// taskbar's own icon, replaced only if it came back too small (see
+// Undersized), with "Use High Resolution Icons" on and squircles off.
+enum class IconLook { Stock, Finder, Custom, Squircle, Plain };
 
 // What a bitmap loaded from, if it's a file or an address; empty otherwise.
 std::wstring UriText(wuxm::ImageSource const& source) {
@@ -2706,10 +3126,16 @@ private:
     int64_t uriToken_ = 0;
 };
 
+// For the icon of a button the taskbar's given to another app (see UpdateAppIcon).
+constexpr auto kNewAppIconWait = std::chrono::milliseconds(300);
+// The longest a new app's icon is kept out of sight while its tile's made.
+constexpr auto kHideNewIconFor = std::chrono::milliseconds(5000);
+
 struct IconSwap {
     winrt::weak_ref<wuxc::Image> image;
     winrt::weak_ref<wux::FrameworkElement> button;
     IconLook look = IconLook::Stock;
+    int custom = -1;                   // Custom: its entry in "App Icons"
     wuxm::ImageSource stock{nullptr};  // the taskbar's latest
     wuxm::ImageSource shown{nullptr};  // what replaces it, once ready
     wuxm::ScaleTransform transform{nullptr};  // the mod's, while a replacement shows
@@ -2720,16 +3146,346 @@ struct IconSwap {
     std::chrono::steady_clock::time_point retryAt{};
     int retries = 0;
     bool renderParent = false;  // drawing the icon alone was refused: what holds it is drawn
+    bool checked = false;       // Plain: its pixels looked at, for this icon
     std::wstring tileUri;       // what the taskbar's icon loaded from, as its tile was made
+    std::wstring appId;         // the app its button was for, as last processed
+    std::chrono::steady_clock::time_point waitUntil{};  // for a new app's icon (see UpdateAppIcon)
+    winrt::weak_ref<wux::UIElement> hidden;  // what holds it, while its tile's made (HideTillMade)
+    std::chrono::steady_clock::time_point hiddenUntil{};
     StockWatch watch;           // the taskbar's icon, loading anew
 };
+
+// Whether its replacement is still to be made from the taskbar's icon's pixels.
+bool NeedsPixels(IconSwap const& s) {
+    return (s.look == IconLook::Squircle && !s.shown) || (s.look == IconLook::Plain && !s.checked);
+}
+
+// What was made from its icon dropped, along with any drawing of it still in
+// progress, to be made again.
+void ResetSwap(IconSwap& s) {
+    if (s.render) Try([&] { s.render.Cancel(); });
+    s.render = nullptr;
+    s.rendering = false;
+    s.generation++;
+    s.shown = nullptr;
+    s.tileUri.clear();
+    s.retry = false;
+    s.retries = 0;
+    s.renderParent = false;
+    s.checked = false;
+    s.waitUntil = {};
+}
+
+extern bool g_iconsSettling;
+void ArmSquircleRetry();
+
+// ---- New apps' icons out of sight till their tiles are made ----
+// Rather than the taskbar's own icon first, then the tile. What holds the icon
+// is hidden, not the icon: a tile's made from a drawing of the icon, which
+// hiding it would leave blank. If drawing the icon alone is refused, what holds
+// it is drawn instead, and what holds that is hidden.
+
+wux::UIElement IconHolder(IconSwap const& s, wuxc::Image const& image) {
+    auto parent = wuxm::VisualTreeHelper::GetParent(image).try_as<wux::UIElement>();
+    if (!parent || !s.renderParent) return parent;
+    return wuxm::VisualTreeHelper::GetParent(parent).try_as<wux::UIElement>();
+}
+
+void ShowIconAgain(IconSwap& s) {
+    if (auto holder = s.hidden.get()) {
+        Try([&] { wuxh::ElementCompositionPreview::GetElementVisual(holder).Opacity(1); });
+    }
+    s.hidden = nullptr;
+    s.hiddenUntil = {};
+}
+
+// Hidden till its tile's made (or, for a plain icon, till it's been looked
+// at), for kHideNewIconFor at most. Not as the dock starts, when every icon
+// waits for the rest to settle (see WaitForIconsToSettle).
+void HideTillMade(IconSwap& s, wuxc::Image const& image) {
+    if (g_iconsSettling || !NeedsPixels(s)) return;
+    auto holder = IconHolder(s, image);
+    if (!holder || s.hidden.get() == holder) return;
+    auto until = s.hidden.get() ? s.hiddenUntil
+                                : std::chrono::steady_clock::now() + kHideNewIconFor;
+    ShowIconAgain(s);  // what held it before, if it's moved
+    wuxh::ElementCompositionPreview::GetElementVisual(holder).Opacity(0);
+    s.hidden = winrt::make_weak(holder);
+    s.hiddenUntil = until;
+    ArmSquircleRetry();
+}
+
+// ---- Other apps' icons ----
+// Each entry in "App Icons" names an app by its ID (Ctrl+I copies it: see INFO
+// CARDS), its name as the dock shows it, or its .exe. A button is for an app
+// ID, so that's matched first, then the name, then the .exe, which takes
+// finding: Windows makes an app's ID from its .exe's path when it hasn't one of
+// its own, Start's shortcut to it points at one, and its windows run from one.
+
+std::wstring AppName(wux::FrameworkElement const& button);
+std::wstring ButtonAppId(wux::FrameworkElement const& button);
+
+// The path in an app ID Windows made from a file's path, for an app without an
+// ID of its own: the path, or a known folder's ID and the path within it.
+// Empty for any other ID.
+std::wstring AppIdPath(std::wstring const& appId) {
+    std::wstring path;
+    if (appId.size() > 38 && appId[0] == L'{' && appId[37] == L'}') {
+        GUID folder;
+        PWSTR folderPath = nullptr;
+        // Not verified: that would check a redirected folder on its server.
+        if (SUCCEEDED(CLSIDFromString(appId.substr(0, 38).c_str(), &folder)) &&
+            SUCCEEDED(SHGetKnownFolderPath(folder, KF_FLAG_DONT_VERIFY, nullptr, &folderPath))) {
+            path = folderPath + appId.substr(38);
+        }
+        CoTaskMemFree(folderPath);
+    } else if (appId.find(L":\\") != std::wstring::npos || appId.rfind(L"\\\\", 0) == 0) {
+        path = appId;
+    }
+    return path;
+}
+
+std::wstring_view FileName(std::wstring_view path) {
+    size_t slash = path.find_last_of(L"\\/");
+    return slash == path.npos ? path : path.substr(slash + 1);
+}
+
+// IShellItem2, IPropertyStore and the properties read here, without linking
+// uuid.lib.
+constexpr GUID kIShellItem2Id = {
+    0x7e9fb0d3, 0x919f, 0x4307, {0xab, 0x2e, 0x9b, 0x18, 0x60, 0x31, 0x0c, 0x93}};
+constexpr GUID kIPropertyStoreId = {
+    0x886d8eeb, 0x8cf2, 0x4446, {0x8d, 0x02, 0xcd, 0xba, 0x1d, 0xbd, 0xcf, 0x99}};
+constexpr PROPERTYKEY kLinkTargetKey = {  // PKEY_Link_TargetParsingPath
+    {0xb9b4b3fc, 0x2b51, 0x4a42, {0xb5, 0xd8, 0x32, 0x41, 0x46, 0xaf, 0xcf, 0x25}}, 2};
+constexpr PROPERTYKEY kAppIdKey = {  // PKEY_AppUserModel_ID
+    {0x9f4c2855, 0x9f79, 0x4b39, {0xa8, 0xd0, 0xe1, 0xd4, 0x2d, 0xe1, 0xd5, 0xf3}}, 5};
+
+// The .exe Start's shortcut to the app points at, if it's an .exe.
+std::wstring ShortcutExe(std::wstring const& appId) {
+    winrt::com_ptr<IShellItem2> item;
+    if (FAILED(SHCreateItemFromParsingName((L"shell:AppsFolder\\" + appId).c_str(), nullptr,
+                                           kIShellItem2Id, item.put_void()))) {
+        return {};
+    }
+    PWSTR target = nullptr;
+    std::wstring exe;
+    if (SUCCEEDED(item->GetString(kLinkTargetKey, &target)) && target &&
+        EndsWithNoCase(target, L".exe")) {
+        exe = target;
+    }
+    CoTaskMemFree(target);
+    return exe;
+}
+
+// The app ID a window was given, if it was given one.
+std::wstring WindowAppId(HWND w) {
+    winrt::com_ptr<IPropertyStore> store;
+    if (FAILED(SHGetPropertyStoreForWindow(w, kIPropertyStoreId, store.put_void()))) return {};
+    PROPVARIANT value;
+    PropVariantInit(&value);
+    std::wstring id;
+    if (SUCCEEDED(store->GetValue(kAppIdKey, &value)) && value.vt == VT_LPWSTR && value.pwszVal) {
+        id = value.pwszVal;
+    }
+    PropVariantClear(&value);
+    return id;
+}
+
+std::wstring ProcessPath(HANDLE process) {
+    WCHAR path[MAX_PATH];
+    DWORD size = ARRAYSIZE(path);
+    return QueryFullProcessImageNameW(process, 0, path, &size) ? std::wstring(path, size)
+                                                               : std::wstring();
+}
+
+// The apps the open windows are for, and their .exes, looked at again at most
+// every few seconds: windows given an app ID, and windows of a Store app's own
+// process. A Store app's window can be a frame shared by all of them
+// (ApplicationFrameHost.exe), whose .exe isn't the app's: it's left out.
+struct WindowApp {
+    std::wstring appId, exe;
+};
+constexpr auto kWindowAppsAgain = std::chrono::seconds(5);
+std::vector<WindowApp> g_windowApps;
+std::chrono::steady_clock::time_point g_windowAppsAt{};
+
+void LookAtWindows(bool now) {
+    auto time = std::chrono::steady_clock::now();
+    if (!now && g_windowAppsAt != std::chrono::steady_clock::time_point{} &&
+        time - g_windowAppsAt < kWindowAppsAgain) {
+        return;
+    }
+    g_windowAppsAt = time;
+    struct Process {
+        DWORD pid;
+        std::wstring storeAppId, exe;
+    };
+    struct Search {
+        std::vector<WindowApp> found;
+        std::vector<Process> processes;
+    } search;
+    EnumWindows(
+        [](HWND w, LPARAM param) -> BOOL {
+            auto& s = *(Search*)param;
+            DWORD pid = 0;
+            if (!IsWindowVisible(w) || GetWindow(w, GW_OWNER) ||
+                !GetWindowThreadProcessId(w, &pid)) {
+                return TRUE;
+            }
+            auto process = std::ranges::find(s.processes, pid, &Process::pid);
+            if (process == s.processes.end()) {
+                Process p{pid};
+                if (HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) {
+                    p.exe = ProcessPath(h);
+                    WCHAR id[130];  // APPLICATION_USER_MODEL_ID_MAX_LENGTH
+                    UINT32 length = ARRAYSIZE(id);
+                    if (GetApplicationUserModelId(h, &length, id) == ERROR_SUCCESS) {
+                        p.storeAppId = id;
+                    }
+                    CloseHandle(h);
+                }
+                if (EndsWithNoCase(p.exe, L"\\ApplicationFrameHost.exe")) p.exe.clear();
+                s.processes.push_back(std::move(p));
+                process = s.processes.end() - 1;
+            }
+            if (process->exe.empty()) return TRUE;
+            std::wstring id = WindowAppId(w);
+            if (id.empty()) id = process->storeAppId;
+            if (!id.empty()) s.found.push_back({std::move(id), process->exe});
+            return TRUE;
+        },
+        (LPARAM)&search);
+    g_windowApps = std::move(search.found);
+}
+
+// The .exes an app's known to run from: the one Windows made its ID from,
+// Start's shortcut's, and its windows', as they've been seen.
+struct AppExes {
+    std::wstring fromId, fromShortcut;
+    std::vector<std::wstring> fromWindows;
+};
+std::unordered_map<std::wstring, AppExes> g_appExes;  // by app ID
+
+AppExes& ExesOf(std::wstring const& appId) {
+    auto [it, added] = g_appExes.try_emplace(appId);
+    if (added) {
+        auto path = AppIdPath(appId);
+        if (EndsWithNoCase(path, L".exe")) it->second.fromId = path;
+        else it->second.fromShortcut = ShortcutExe(appId);
+    }
+    return it->second;
+}
+
+// Adds the .exes of its windows open now.
+void AddWindowExes(std::wstring const& appId, AppExes& exes) {
+    for (auto const& w : g_windowApps) {
+        if (_wcsicmp(w.appId.c_str(), appId.c_str())) continue;
+        bool known = std::ranges::any_of(exes.fromWindows, [&](std::wstring const& exe) {
+            return !_wcsicmp(exe.c_str(), w.exe.c_str());
+        });
+        if (!known) exes.fromWindows.push_back(w.exe);
+    }
+}
+
+// An .exe as typed in "App Icons": a full path, or a file name, matching that
+// file anywhere.
+bool IsExe(std::wstring const& typed, std::wstring const& path) {
+    if (path.empty()) return false;
+    if (typed.find(L'\\') != typed.npos) return !_wcsicmp(typed.c_str(), path.c_str());
+    auto name = FileName(path);
+    return name.size() == typed.size() && !_wcsnicmp(name.data(), typed.data(), name.size());
+}
+
+bool RunsFrom(AppExes const& exes, std::wstring const& typed) {
+    return IsExe(typed, exes.fromId) || IsExe(typed, exes.fromShortcut) ||
+           std::ranges::any_of(exes.fromWindows,
+                               [&](std::wstring const& exe) { return IsExe(typed, exe); });
+}
+
+enum class AppMatch { None, Id, Name, Exe };
+
+// Its entry in "App Icons", or -1: the first with its ID, else the first with
+// its name, else the first with one of its .exes.
+int AppIconFor(wux::FrameworkElement const& button, AppMatch* how = nullptr) {
+    auto const& entries = g_settings.appIcons;
+    if (how) *how = AppMatch::None;
+    if (entries.empty() || !IsAppButton(button)) return -1;
+    auto found = [&](int i, AppMatch match) {
+        if (how) *how = match;
+        return i;
+    };
+    int count = (int)entries.size();
+    std::wstring id = ButtonAppId(button);
+    for (int i = 0; i < count && !id.empty(); i++) {
+        if (!_wcsicmp(entries[i].app.c_str(), id.c_str())) return found(i, AppMatch::Id);
+    }
+    std::optional<std::wstring> name;
+    for (int i = 0; i < count; i++) {
+        if (entries[i].exe) continue;
+        if (!name) name = AppName(button);
+        if (!name->empty() && !_wcsicmp(entries[i].app.c_str(), name->c_str())) {
+            return found(i, AppMatch::Name);
+        }
+    }
+    if (id.empty() || std::ranges::none_of(entries, &AppIcon::exe)) return -1;
+    auto& exes = ExesOf(id);
+    for (int pass = 0; pass < 2; pass++) {
+        for (int i = 0; i < count; i++) {
+            if (entries[i].exe && RunsFrom(exes, entries[i].app)) return found(i, AppMatch::Exe);
+        }
+        if (pass > 0) break;
+        // Not yet seen running from one: its windows, if they're due a look.
+        size_t known = exes.fromWindows.size();
+        LookAtWindows(false);
+        AddWindowExes(id, exes);
+        if (exes.fromWindows.size() == known) break;
+    }
+    return -1;
+}
+
+wuxm::ImageSource FileTile(std::wstring const& path, int px);
+wuxm::ImageSource StartTile(int px);
+
+// The user's image, as a tile if it goes in one (see Squircled).
+wuxm::ImageSource CustomIconSource(CustomIcon const& icon, wux::UIElement const& el) {
+    return Squircled(icon) ? FileTile(icon.path, MagnifiedPixels(el, 1))
+                           : LoadImageFile(icon.path, MagnifiedPixels(el, icon.scale));
+}
+
+// Loaded once per entry. An unreadable image leaves Windows' own icon.
+[[clang::no_destroy]] std::vector<std::optional<wuxm::ImageSource>> g_appIconSources;
+
+wuxm::ImageSource AppIconSource(int i, wux::UIElement const& el) {
+    auto const& entries = g_settings.appIcons;
+    if (i < 0 || i >= (int)entries.size()) return nullptr;
+    if (g_appIconSources.size() != entries.size()) {
+        g_appIconSources.assign(entries.size(), std::nullopt);
+    }
+    auto& source = g_appIconSources[i];
+    if (!source) source = CustomIconSource(entries[i].icon, el);
+    return *source;
+}
+
+float AppIconScale(int i) {
+    auto const& entries = g_settings.appIcons;
+    return i >= 0 && i < (int)entries.size() ? CustomIconScale(entries[i].icon) : kMacIconScale;
+}
 
 [[clang::no_destroy]] std::list<IconSwap> g_iconSwaps;
 [[clang::no_destroy]] std::optional<wuxm::ImageSource> g_finderIconSource;  // none if unreadable
 
-IconLook LookFor(wux::FrameworkElement const& button) {
+// With `custom`, its entry in "App Icons", for Custom.
+IconLook LookFor(wux::FrameworkElement const& button, int* custom = nullptr) {
+    if (custom) *custom = -1;
     if (HasFinderIcon() && IsFileExplorer(button)) return IconLook::Finder;
-    if (g_settings.squircleIcons && IsAppButton(button)) return IconLook::Squircle;
+    if (!IsAppButton(button)) return IconLook::Stock;
+    if (int i = AppIconFor(button); i >= 0) {
+        if (custom) *custom = i;
+        return IconLook::Custom;
+    }
+    if (g_settings.squircleIcons) return IconLook::Squircle;
+    if (g_size.iconLoadSize > 0) return IconLook::Plain;
     return IconLook::Stock;
 }
 
@@ -2742,10 +3498,7 @@ IconSwap* FindSwap(wux::FrameworkElement const& image) {
 
 // Loaded once. An unreadable custom image leaves Windows' own icon.
 wuxm::ImageSource FinderIconSource(wux::UIElement const& el) {
-    if (!g_finderIconSource) {
-        auto& custom = g_settings.customFinder;
-        g_finderIconSource = LoadImageFile(custom.path, MagnifiedPixels(el, custom.scale));
-    }
+    if (!g_finderIconSource) g_finderIconSource = CustomIconSource(g_settings.customFinder, el);
     return *g_finderIconSource;
 }
 
@@ -2756,11 +3509,13 @@ void ApplyIconScale(wux::FrameworkElement const& el) {
     auto dp = wux::UIElement::RenderTransformProperty();
     bool replaced = s->shown && el.as<wuxc::Image>().Source() == s->shown;
     bool ours = s->transform && el.RenderTransform() == s->transform;
-    if (!replaced) {
+    if (!replaced || s->look == IconLook::Plain) {
         if (ours) PutBack(el, dp);
         return;
     }
-    float k = s->look == IconLook::Finder ? g_settings.customFinder.scale : kMacIconScale;
+    float k = s->look == IconLook::Finder   ? CustomIconScale(g_settings.customFinder)
+              : s->look == IconLook::Custom ? AppIconScale(s->custom)
+                                            : kMacIconScale;
     float center = g_size.icon / 2;
     if (ours && s->transform.ScaleX() == k && s->transform.CenterX() == center) return;
     s->transform = wuxm::ScaleTransform();
@@ -2772,14 +3527,16 @@ void ApplyIconScale(wux::FrameworkElement const& el) {
 }
 
 void RequestSquircle(IconSwap& s, wuxc::Image const& image);
-wuxm::ImageSource CachedSquircle(wuxm::ImageSource const& stock);
+wuxm::ImageSource CachedSquircle(wuxm::ImageSource const& stock, std::wstring const& appId);
+void ArmSquircleRetry();
 void NoteIconChange();
 void OnStockChanged(wf::IInspectable const& sender);
+std::wstring ButtonAppId(wux::FrameworkElement const& button);
 
-// Only tiles are made from the taskbar's icon, so only they need to know when
-// it changes in place.
+// Only tiles and plain icons are made from the taskbar's icon, so only they
+// need to know when it changes in place.
 void WatchStock(IconSwap& s) {
-    if (s.look != IconLook::Squircle) return s.watch.Stop();
+    if (s.look != IconLook::Squircle && s.look != IconLook::Plain) return s.watch.Stop();
     s.watch.Watch(s.stock, [](wf::IInspectable const& sender) {
         Try([&] { OnStockChanged(sender); }, L"Squircle icon");
     });
@@ -2794,12 +3551,14 @@ void ShowSwap(IconSwap& s, wuxc::Image const& image) {
 
 void UpdateSwap(IconSwap& s, wuxc::Image const& image) {
     if (s.look == IconLook::Finder) s.shown = FinderIconSource(image);
+    if (s.look == IconLook::Custom) s.shown = AppIconSource(s.custom, image);
     if (s.look == IconLook::Squircle && !s.shown) {
-        s.shown = CachedSquircle(s.stock);
+        s.shown = CachedSquircle(s.stock, s.appId);
         if (s.shown) s.tileUri = UriText(s.stock);
     }
     ShowSwap(s, image);
-    if (s.look == IconLook::Squircle && !s.shown) RequestSquircle(s, image);
+    if (NeedsPixels(s)) RequestSquircle(s, image);
+    if (!NeedsPixels(s)) ShowIconAgain(s);
 }
 
 // The taskbar set an icon: kept to put back, and replaced again.
@@ -2814,10 +3573,10 @@ void OnIconSourceChanged(wux::FrameworkElement const& el) {
     if (Override* o = FindOverride(el, dp)) o->original = image.ReadLocalValue(dp);
     auto button = s->button.get();
     s->stock = source;
-    s->look = button ? LookFor(button) : IconLook::Stock;
-    s->shown = nullptr;
-    s->retries = 0;
-    s->renderParent = false;
+    s->custom = -1;
+    s->look = button ? LookFor(button, &s->custom) : IconLook::Stock;
+    if (button) s->appId = ButtonAppId(button);
+    ResetSwap(*s);
     WatchStock(*s);
     UpdateSwap(*s, image);
 }
@@ -2826,17 +3585,20 @@ void UpdateAppIcon(wux::FrameworkElement const& el, wux::FrameworkElement const&
     auto image = el.try_as<wuxc::Image>();
     if (!image) return;
     auto dp = wuxc::Image::SourceProperty();
-    IconLook look = LookFor(button);
+    int custom = -1;
+    IconLook look = LookFor(button, &custom);
     IconSwap* s = FindSwap(el);
 
     if (look == IconLook::Stock) {
         if (!s) return;
+        ShowIconAgain(*s);
         g_iconSwaps.remove_if([&](IconSwap const& swap) { return &swap == s; });
         Release(el, dp);
         Release(el, wux::UIElement::RenderTransformProperty());
         ApplyIconSize(el);
         return;
     }
+    bool fresh = !s;
     if (!s) {
         // A binding couldn't be put back once replaced.
         auto original = image.ReadLocalValue(dp);
@@ -2849,22 +3611,40 @@ void UpdateAppIcon(wux::FrameworkElement const& el, wux::FrameworkElement const&
         Track(el, wux::UIElement::RenderTransformProperty(), ApplyIconScale);
     }
     s->button = winrt::make_weak(button);
-    if (s->look != look) {
+    auto appId = ButtonAppId(button);
+    if (s->look != look || s->custom != custom) {
         s->look = look;
-        s->shown = nullptr;
-        s->retries = 0;
-        s->renderParent = false;
+        s->custom = custom;
+        ResetSwap(*s);
         WatchStock(*s);
+    } else if (appId != s->appId && !s->appId.empty()) {
+        // The taskbar gave this button to another app, as when one opens and
+        // the rest move along. It can draw the new app's icon into the bitmap
+        // it has, without setting it anew, so what was made from the old one
+        // has to go. The new icon may still be on its way into the bitmap, so
+        // it's given a moment, unless there's a tile for it already.
+        NoteIconChange();
+        ResetSwap(*s);
+        fresh = true;
+        if (s->look != IconLook::Squircle || !CachedSquircle(s->stock, appId)) {
+            s->waitUntil = std::chrono::steady_clock::now() + kNewAppIconWait;
+            s->retry = true;
+            s->retryAt = s->waitUntil;
+            ArmSquircleRetry();
+        }
     }
+    s->appId = appId;
     UpdateSwap(*s, image);
+    if (fresh) HideTillMade(*s, image);
 }
 
 // ---- Start ----
 // In the dock without "Hide Windows Start Button", it can show the user's own
-// icon. Windows' is an animation, not an image: it's made transparent, and the
-// user's image goes over it in an Image of the mod's own. That's added as the
-// plates are measured, as the taskbar doesn't like its tree changing while it
-// updates a button.
+// icon, or with Squircle Icons on, a tile of the mod's own (see ModStartIcon).
+// Windows' is an animation, not an image, so it can't be made into a tile: it's
+// made transparent, and the mod's image goes over it in an Image of its own.
+// That's added as the plates are measured, as the taskbar doesn't like its tree
+// changing while it updates a button.
 
 struct StartIcon {
     winrt::weak_ref<wux::FrameworkElement> stock;  // AnimatedVisualPlayer#Icon
@@ -2920,9 +3700,11 @@ void AddStartIcon(wux::FrameworkElement const& button) {
 
     auto& custom = g_settings.customStart;
     if (!g_startIconSource) {
-        g_startIconSource = LoadImageFile(custom.path, MagnifiedPixels(button, custom.scale));
+        g_startIconSource = HasStartIcon() ? CustomIconSource(custom, button)
+                                           : StartTile(MagnifiedPixels(button, 1));
     }
     if (!*g_startIconSource) return;  // unreadable: Windows' own stays
+    float k = CustomIconScale(custom);
 
     wuxc::Image image;
     image.Source(*g_startIconSource);
@@ -2933,8 +3715,8 @@ void AddStartIcon(wux::FrameworkElement const& button) {
     image.VerticalAlignment(wux::VerticalAlignment::Center);
     image.IsHitTestVisible(false);
     wuxm::ScaleTransform scale;
-    scale.ScaleX(custom.scale);
-    scale.ScaleY(custom.scale);
+    scale.ScaleX(k);
+    scale.ScaleY(k);
     image.RenderTransformOrigin({0.5, 0.5});
     image.RenderTransform(scale);
     wuxc::Grid::SetRow(image, wuxc::Grid::GetRow(holder));
@@ -2981,7 +3763,7 @@ void UpdateStartLogo(wux::FrameworkElement const& el, wux::FrameworkElement cons
         return;
     }
     auto dp = wux::UIElement::RenderTransformProperty();
-    if (g_settings.hideStart || HasStartIcon()) {
+    if (g_settings.hideStart || ModStartIcon()) {
         if (FindOverride(el, dp)) Release(el, dp);
         return;
     }
@@ -3008,7 +3790,7 @@ void RemoveStartIcons() {
 // While the plates are measured.
 void EnsureStartIcons() {
     g_startIcons->remove_if([](StartIcon const& s) { return !s.stock.get(); });
-    if (g_settings.hideStart || !HasStartIcon()) return;
+    if (!ModStartIcon()) return;
     for (auto& b : *g_buttons) {
         auto button = b.element.get();
         if (button && IsStartButton(button)) Try([&] { AddStartIcon(button); }, L"Start icon");
@@ -3020,7 +3802,7 @@ void EnsureStartIcons() {
 // drawn. If it's mostly opaque and square, it's a tile already: cropped to fill
 // the squircle, but only if each side is flat between its corners, right up to
 // its edge. Otherwise it's a shape, shrunk onto a tile of the Squircle color:
-// for Auto, light, or dark if its outline is light (see TileColors).
+// for Auto, light, or dark if its outline is light (see TileFill).
 
 constexpr int kAlphaShown = 64;              // counts as part of the icon
 constexpr int kAlphaSolid = 224;             // counts as solid
@@ -3035,13 +3817,13 @@ constexpr float kLongShapeSize = 0.8f;       // a long one, by its longer side
 constexpr float kDarkTileFrom = 0.55f;       // a shape's edge lightness that gets a dark tile
 constexpr float kPreferLightDarkFrom = 0.75f;  // the same, for Prefer Light
 constexpr float kPreferDarkLightUpTo = 0.35f;  // and the lightest that's light, for Prefer Dark
-constexpr float kTileCorner = 0.225f;        // corner radius, of the tile's size
-constexpr float kTileShadowBlur = 0.012f;    // of the tile's size
-constexpr float kTileShadowDrop = 0.01f;
-constexpr float kTileShadowOpacity = 0.3f;
-constexpr std::array<Color, 2> kLightTile{{{255, 0xFF, 0xFF, 0xFF}, {255, 0xE9, 0xE9, 0xEE}}};
-constexpr std::array<Color, 2> kDarkTile{{{255, 0x4A, 0x4A, 0x4E}, {255, 0x1F, 0x1F, 0x22}}};
-constexpr float kCustomTileShade = 0.08f;    // a custom tile's bottom, darker than its top
+constexpr float kTileShadowBlurStep = 0.003f;   // per Drop Shadow Spread, of the tile's size
+constexpr float kTileShadowDropStep = 0.0025f;  // per Drop Shadow Distance, of the tile's size
+// A side's glow or shadow is an inner shadow: the tile's shape moved in from
+// that side by this much of its reach, and softened by this much, leaving the
+// gap to be colored.
+constexpr float kTileEdgeShift = 0.4f;
+constexpr float kTileEdgeSoftness = 0.2f;
 constexpr int kSquircleRetries = 30;         // while the icon isn't laid out or drawn yet,
 constexpr int kSquircleSlowRetries = 30;     // then these, as with a button that arrives late
 constexpr auto kSquircleSlowRetryDelay = std::chrono::milliseconds(1000);
@@ -3092,25 +3874,321 @@ struct IconPixels {
     std::vector<BYTE> pixels;  // premultiplied BGRA
 };
 
-// A shape's tile colors, top to bottom, by how light its outline is (0-1).
+// A shape's tile color, by how light its outline is (0-1).
 // Auto gives a dark tile from kDarkTileFrom up; Prefer Light only to the
 // lightest outlines, Prefer Dark to all but the darkest.
-std::array<Color, 2> TileColors(float outline) {
-    switch (g_settings.tileColor) {
-        case TileColor::AlwaysLight: return kLightTile;
-        case TileColor::AlwaysDark: return kDarkTile;
-        case TileColor::PreferLight:
-            return outline >= kPreferLightDarkFrom ? kDarkTile : kLightTile;
-        case TileColor::PreferDark:
-            return outline > kPreferDarkLightUpTo ? kDarkTile : kLightTile;
-        case TileColor::Custom: {
-            auto [r, g, b] = g_settings.tileCustomColor;
-            Color top{255, r, g, b};
-            return {top, ShiftLightness(top, -kCustomTileShade)};
-        }
+Color TileFill(float outline) {
+    auto& s = g_settings;
+    auto rgb = [](uint8_t const (&c)[3]) { return Color{255, c[0], c[1], c[2]}; };
+    Color light = rgb(s.tileLightColor), dark = rgb(s.tileDarkColor);
+    switch (s.tileColor) {
+        case TileColor::AlwaysLight: return light;
+        case TileColor::AlwaysDark: return dark;
+        case TileColor::PreferLight: return outline >= kPreferLightDarkFrom ? dark : light;
+        case TileColor::PreferDark: return outline > kPreferDarkLightUpTo ? dark : light;
+        case TileColor::Custom: return rgb(s.tileCustomColor);
         case TileColor::Auto: break;
     }
-    return outline >= kDarkTileFrom ? kDarkTile : kLightTile;
+    return outline >= kDarkTileFrom ? dark : light;
+}
+
+// The tile's outline, `t` across at `o`, `o`: a squircle (Apple's smooth
+// curve) or plain rounded corners, as set.
+void AddTileShape(Gdiplus::GraphicsPath& path, float o, float t) {
+    namespace gp = Gdiplus;
+    float r = g_settings.tileCornerRadius / 100.0f * t;
+    if (g_settings.tileCorner == CornerStyle::Rounded) {
+        r = std::min(r, t / 2);
+        if (r < 0.5f) {
+            path.AddRectangle(gp::RectF(o, o, t, t));
+            return;
+        }
+        float d = 2 * r;
+        path.AddArc(o, o, d, d, 180, 90);
+        path.AddArc(o + t - d, o, d, d, 270, 90);
+        path.AddArc(o + t - d, o + t - d, d, d, 0, 90);
+        path.AddArc(o, o + t - d, d, d, 90, 90);
+        path.CloseFigure();
+        return;
+    }
+    r = SquircleRadius(t, t, r);
+    std::vector<gp::PointF> points;
+    for (auto& p : Squircle(o, o, t, t, r, r)) points.push_back({p.X, p.Y});
+    path.AddBeziers(points.data(), (INT)points.size());
+    path.CloseFigure();
+}
+
+// `r`, `g`, `b` at `a` over a premultiplied BGRA pixel.
+void Overlay(BYTE* p, uint8_t r, uint8_t g, uint8_t b, float a) {
+    p[0] = (BYTE)std::lround(b * a + p[0] * (1 - a));
+    p[1] = (BYTE)std::lround(g * a + p[1] * (1 - a));
+    p[2] = (BYTE)std::lround(r * a + p[2] * (1 - a));
+    p[3] = (BYTE)std::lround(255 * a + p[3] * (1 - a));
+}
+
+// The tile's colors in `pixels` (premultiplied BGRA) made more vivid or duller,
+// as "Vibrance" is set. Above 100, as vibrance does: dull colors gain the most,
+// the most vivid hardly any. Below, all fade toward their gray alike, all the
+// way at 0. Grays, the tile's light and dark colors among them, are unchanged.
+void ApplyTileVibrance(std::vector<BYTE>& pixels) {
+    int vibrance = g_settings.tileVibrance;
+    if (vibrance == 100) return;
+    float v = (vibrance - 100) / 100.0f;
+    for (size_t i = 0; i + 3 < pixels.size(); i += 4) {
+        BYTE* p = &pixels[i];
+        if (!p[3]) continue;
+        float b = p[0], g = p[1], r = p[2], a = p[3];
+        float gray = 0.299f * r + 0.587f * g + 0.114f * b;
+        float vivid = std::clamp((std::max({r, g, b}) - std::min({r, g, b})) / a, 0.0f, 1.0f);
+        float k = v < 0 ? 1 + v : 1 + v * (1 - vivid);
+        auto mix = [&](float c) {
+            return (BYTE)std::lround(std::clamp(gray + (c - gray) * k, 0.0f, a));
+        };
+        p[0] = mix(b);
+        p[1] = mix(g);
+        p[2] = mix(r);
+    }
+}
+
+// The sheen, if on: white over the tile in `pixels`, as for ApplyTileEdges,
+// fading out from its top (`o` down, `t` across).
+void ApplyTileSheen(std::vector<BYTE>& pixels, int size, std::vector<float> const& shape, float o,
+                    float t) {
+    auto& s = g_settings;
+    if (!s.tileSheen || s.tileSheenOpacity <= 0 || s.tileSheenSize <= 0) return;
+    float reach = s.tileSheenSize / 100.0f * t, opacity = s.tileSheenOpacity / 100.0f;
+    for (int y = 0; y < size; y++) {
+        float fade = std::clamp(1 - (y + 0.5f - o) / reach, 0.0f, 1.0f);
+        if (fade <= 0) break;
+        for (int x = 0; x < size; x++) {
+            size_t i = (size_t)y * size + x;
+            float a = opacity * fade * shape[i];
+            if (a > 0) Overlay(&pixels[i * 4], 255, 255, 255, a);
+        }
+    }
+}
+
+// A glow or shadow along one side of a shape: `reach` pixels in from its edge.
+struct InnerEdge {
+    Color color;
+    float opacity = 0;  // 0-1
+    float reach = 0;    // none at 0
+};
+
+// `edges` (top, bottom, left, right) over the shape in `pixels` (premultiplied
+// BGRA, `w` by `h`), which covers `shape`. Each is an inner shadow from its
+// side: the shape moved in from that side and softened, the gap it leaves
+// colored. So it follows the corners round, and fades out with no visible end.
+void ApplyInnerEdges(std::vector<BYTE>& pixels, int w, int h, std::vector<float> const& shape,
+                     std::array<InnerEdge, 4> const& edges) {
+    // Which way each side's shadow is cast: top, bottom, left, right.
+    const int casts[4][2] = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}};
+    std::vector<float> moved(shape.size());
+    for (size_t side = 0; side < edges.size(); side++) {
+        InnerEdge const& edge = edges[side];
+        if (edge.opacity <= 0 || edge.reach <= 0) continue;
+        float shift = edge.reach * kTileEdgeShift;
+        int whole = (int)shift;
+        float part = shift - whole;  // between two pixels: the two mixed
+        auto [cx, cy] = casts[side];
+        auto at = [&](int x, int y) {
+            return x >= 0 && y >= 0 && x < w && y < h ? shape[(size_t)y * w + x] : 0.0f;
+        };
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                moved[(size_t)y * w + x] = at(x - cx * whole, y - cy * whole) * (1 - part) +
+                                           at(x - cx * (whole + 1), y - cy * (whole + 1)) * part;
+            }
+        }
+        Blur(moved, w, h, edge.reach * kTileEdgeSoftness);
+        auto [_, r, g, b] = edge.color;
+        for (size_t i = 0; i < shape.size(); i++) {
+            float a = edge.opacity * shape[i] * std::clamp(1 - moved[i], 0.0f, 1.0f);
+            if (a > 0) Overlay(&pixels[i * 4], r, g, b, a);
+        }
+    }
+}
+
+// Each side's glow or shadow, as set, over the tile in `pixels` (premultiplied
+// BGRA, `size` square), whose shape covers `shape` and is `t` across.
+void ApplyTileEdges(std::vector<BYTE>& pixels, int size, std::vector<float> const& shape,
+                    float t) {
+    std::array<InnerEdge, 4> edges;
+    for (size_t side = 0; side < edges.size(); side++) {
+        TileEdge const& edge = g_settings.tileEdges[side];
+        auto [r, g, b] = edge.color;
+        edges[side] = {{255, r, g, b}, edge.opacity / 100.0f, edge.size / 100.0f * t};
+    }
+    ApplyInnerEdges(pixels, size, size, shape, edges);
+}
+
+// =============================================================================
+// MAC BORDER
+// =============================================================================
+// The dock's MacOS Style border, and the tray's: each side's glow or shadow, as
+// set, drawn as squircle tiles' edges are, so it follows the corners round; and
+// a thin line along each edge, light inside one that glows, faintly dark
+// outside any other. It's drawn at the screen's scale for a short surface, a
+// pixel bigger all round for the lines outside. Past its corners it doesn't
+// change along its length, so it's shown in three slices: its two ends, and a
+// column from its middle stretched between them. As the dock widens while it
+// magnifies, nothing is drawn again.
+
+// `shape` (`w` by `h`) moved `distance` pixels along (`ux`, `uy`), a unit step
+// along one axis; a fraction mixes the two nearest pixels.
+std::vector<float> MovedShape(std::vector<float> const& shape, int w, int h, int ux, int uy,
+                              float distance) {
+    int whole = (int)distance;
+    float part = distance - whole;
+    auto at = [&](int x, int y) {
+        return x >= 0 && y >= 0 && x < w && y < h ? shape[(size_t)y * w + x] : 0.0f;
+    };
+    std::vector<float> moved(shape.size());
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            moved[(size_t)y * w + x] = at(x - ux * whole, y - uy * whole) * (1 - part) +
+                                       at(x - ux * (whole + 1), y - uy * (whole + 1)) * part;
+        }
+    }
+    return moved;
+}
+
+// For a surface `w` by `h` (view pixels) with corners `r` (as ShapeSurface
+// has them), its glows sized by `reference`; drawn again only when that or
+// its look changes.
+void DrawMacBorder(Surface& s, float w, float h, float r, float reference) {
+    namespace gp = Gdiplus;
+    float k = 1;
+    if (auto root = s.root.XamlRoot()) k = (float)root.RasterizationScale();
+    Color fill = s.macFill;
+    float fillLightness = Lightness(fill);
+    Color lighter = ShiftLightness(fill, (1 - fillLightness) * kEdgeHighlight);
+    Color darker = ShiftLightness(fill, -fillLightness * kEdgeShadow);
+    lighter.A = darker.A = 255;
+
+    // Each side's glow, in view pixels, and whether it's light.
+    std::array<InnerEdge, 4> glows;
+    std::array<bool, 4> light{};
+    for (size_t side = 0; side < glows.size(); side++) {
+        DockEdge const& edge = g_settings.dockEdges[side];
+        Color color = edge.lighter ? lighter : Color{255, edge.color[0], edge.color[1], edge.color[2]};
+        glows[side] = {color, edge.opacity / 100.0f, edge.size / 100.0f * reference};
+        light[side] = glows[side].opacity > 0 && glows[side].reach > 0 &&
+                      Lightness(color) >= fillLightness;
+    }
+
+    // How far in from each end it changes: the corners, and the top and bottom
+    // glows' softening around them, or the sides' glows, whichever's further.
+    float reachTB = std::max(glows[0].reach, glows[1].reach);
+    float reachLR = std::max(glows[2].reach, glows[3].reach);
+    float end = std::max(kCornerReach * r + reachTB * (kTileEdgeShift + 3 * kTileEdgeSoftness),
+                         reachLR) + 2;
+    int pad = std::max(1, (int)std::ceil(k));  // a view pixel, for the lines outside
+    int widthPx = std::max(1, (int)std::round(w * k));
+    int endPx = std::min((int)std::ceil(end * k), (widthPx - 1) / 2);  // a short one's meet
+    int shapeW = 2 * endPx + 1, shapeH = std::max(1, (int)std::round(h * k));
+    int W = shapeW + 2 * pad, H = shapeH + 2 * pad;
+
+    std::wstring key;
+    auto add = [&](double v) { key += std::to_wstring(v) + L","; };
+    for (double v : {(double)k, (double)endPx, (double)shapeH, (double)r,
+                     (double)s.macLineAlpha}) {
+        add(v);
+    }
+    for (Color c : {fill, lighter}) add((double)(c.A << 24 | c.R << 16 | c.G << 8 | c.B));
+    for (size_t side = 0; side < glows.size(); side++) {
+        auto const& g = glows[side];
+        add((double)(g.color.R << 16 | g.color.G << 8 | g.color.B));
+        add(g.opacity);
+        add(g.reach);
+        add(light[side]);
+    }
+    if (key == s.macDrawn) return;
+    if (!EnsureGdiplus()) return;
+
+    // Its shape's coverage.
+    std::vector<float> shape((size_t)W * H);
+    {
+        gp::Bitmap mask(W, H, PixelFormat32bppPARGB);
+        {
+            gp::Graphics g(&mask);
+            g.SetSmoothingMode(gp::SmoothingModeAntiAlias);
+            g.Clear(gp::Color(0, 0, 0, 0));
+            gp::GraphicsPath path;
+            std::vector<gp::PointF> points;
+            for (auto& p : Squircle((float)pad, (float)pad, (float)shapeW, (float)shapeH, r * k,
+                                    r * k)) {
+                points.push_back({p.X, p.Y});
+            }
+            path.AddBeziers(points.data(), (INT)points.size());
+            path.CloseFigure();
+            gp::SolidBrush solid(gp::Color(255, 255, 255, 255));
+            g.FillPath(&solid, &path);
+        }
+        gp::Rect all(0, 0, W, H);
+        gp::BitmapData data;
+        if (mask.LockBits(&all, gp::ImageLockModeRead, PixelFormat32bppPARGB, &data) != gp::Ok) {
+            return;
+        }
+        for (int y = 0; y < H; y++) {
+            auto row = (BYTE const*)data.Scan0 + (size_t)y * data.Stride;
+            for (int x = 0; x < W; x++) shape[(size_t)y * W + x] = row[x * 4 + 3] / 255.0f;
+        }
+        mask.UnlockBits(&data);
+    }
+
+    // The glows, then the lines over them.
+    std::vector<BYTE> pixels(shape.size() * 4, 0);
+    std::array<InnerEdge, 4> scaled = glows;
+    for (auto& g : scaled) g.reach *= k;
+    ApplyInnerEdges(pixels, W, H, shape, scaled);
+    const int casts[4][2] = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}};  // inward from each side
+    std::vector<float> inside(shape.size()), outside(shape.size());
+    for (size_t side = 0; side < glows.size(); side++) {
+        auto [cx, cy] = casts[side];
+        if (light[side]) {
+            auto moved = MovedShape(shape, W, H, cx, cy, k);
+            for (size_t i = 0; i < shape.size(); i++) {
+                inside[i] = std::max(inside[i], shape[i] * (1 - moved[i]));
+            }
+        } else {
+            auto moved = MovedShape(shape, W, H, -cx, -cy, k);
+            for (size_t i = 0; i < shape.size(); i++) {
+                outside[i] = std::max(outside[i], moved[i] * (1 - shape[i]));
+            }
+        }
+    }
+    float lightAlpha = s.macLineAlpha / 255.0f * kEdgeHighlightOpacity;
+    float darkAlpha = s.macLineAlpha / 255.0f;
+    for (size_t i = 0; i < shape.size(); i++) {
+        if (inside[i] > 0) {
+            Overlay(&pixels[i * 4], lighter.R, lighter.G, lighter.B, lightAlpha * inside[i]);
+        }
+        if (outside[i] > 0) {
+            Overlay(&pixels[i * 4], darker.R, darker.G, darker.B, darkAlpha * outside[i]);
+        }
+    }
+
+    // The three slices: its ends, and the column between them.
+    auto slice = [&](int x0, int width) {
+        std::vector<BYTE> part((size_t)width * H * 4);
+        for (int y = 0; y < H; y++) {
+            memcpy(&part[(size_t)y * width * 4], &pixels[((size_t)y * W + x0) * 4], width * 4);
+        }
+        return BitmapFromPixels(width, H, part);
+    };
+    int endW = pad + endPx;
+    float viewEnd = endW / k, viewH = H / k, viewPad = pad / k;
+    s.macLeft.Source(slice(0, endW));
+    s.macMiddle.Source(slice(endW, 1));
+    s.macRight.Source(slice(endW + 1, W - endW - 1));
+    for (auto const& image : {s.macLeft, s.macRight}) {
+        image.Width(viewEnd);
+        image.Height(viewH);
+    }
+    s.macMiddle.Height(viewH);
+    s.mac.Margin({-viewPad, -viewPad, -viewPad, -viewPad});
+    s.macDrawn = key;
 }
 
 // A `w` x `h` icon as a squircle tile, on a canvas kMacIconScale times bigger.
@@ -3191,9 +4269,7 @@ IconPixels MakeSquircleIcon(std::vector<BYTE> source, int w, int h) {
             g.DrawImage(&icon, gp::RectF(0, 0, (gp::REAL)t, (gp::REAL)t), x0 + trim, y0 + trim,
                         bw - 2 * trim, bh - 2 * trim, gp::UnitPixel, &edges);
         } else {
-            auto colors = TileColors(outline);
-            gp::LinearGradientBrush back(gp::PointF(0, -1), gp::PointF(0, (gp::REAL)t + 1),
-                                         GdiColor(colors[0]), GdiColor(colors[1]));
+            gp::SolidBrush back(GdiColor(TileFill(outline)));
             g.FillRectangle(&back, 0, 0, t, t);
             float k = t * (aspect >= 0.85f ? kShapeSize : kLongShapeSize) / std::max(bw, bh);
             gp::RectF at((t - bw * k) / 2, (t - bh * k) / 2, bw * k, bh * k);
@@ -3202,15 +4278,11 @@ IconPixels MakeSquircleIcon(std::vector<BYTE> source, int w, int h) {
         }
     }
 
-    std::vector<gp::PointF> points;
-    for (auto& p : Squircle(o, o, (float)t, (float)t, kTileCorner * t, kTileCorner * t)) {
-        points.push_back({p.X, p.Y});
-    }
     gp::GraphicsPath path;
-    path.AddBeziers(points.data(), (INT)points.size());
-    path.CloseFigure();
+    AddTileShape(path, o, (float)t);
 
-    // The shadow, from the squircle blurred, then the face cut to it.
+    // The shadow, from the tile's shape blurred and moved as set, then the
+    // face cut to the shape.
     IconPixels out{size, std::vector<BYTE>((size_t)size * size * 4)};
     {
         gp::Bitmap mask(size, size, size * 4, PixelFormat32bppPARGB, out.pixels.data());
@@ -3219,35 +4291,120 @@ IconPixels MakeSquircleIcon(std::vector<BYTE> source, int w, int h) {
         gp::SolidBrush black(gp::Color(255, 0, 0, 0));
         g.FillPath(&black, &path);
     }
-    std::vector<float> shadow((size_t)size * size);
-    for (size_t i = 0; i < shadow.size(); i++) shadow[i] = out.pixels[i * 4 + 3] / 255.0f;
-    Blur(shadow, size, size, kTileShadowBlur * t);
-    int drop = (int)std::lround(kTileShadowDrop * t);
+    std::vector<float> shape((size_t)size * size);
+    for (size_t i = 0; i < shape.size(); i++) shape[i] = out.pixels[i * 4 + 3] / 255.0f;
+    std::vector<float> shadow = shape;
+    auto& set = g_settings;
+    float opacity = set.tileShadowOpacity / 100.0f;
+    Blur(shadow, size, size, set.tileShadowSpread * kTileShadowBlurStep * t);
+    // Which way it falls, as a step in x and y; diagonals as far as the rest.
+    float dx = 0, dy = 0;
+    switch (set.tileShadowDirection) {
+        case ShadowDirection::Down: dy = 1; break;
+        case ShadowDirection::DownLeft: dx = -0.7071f, dy = 0.7071f; break;
+        case ShadowDirection::DownRight: dx = 0.7071f, dy = 0.7071f; break;
+        case ShadowDirection::Left: dx = -1; break;
+        case ShadowDirection::Right: dx = 1; break;
+        case ShadowDirection::Up: dy = -1; break;
+        case ShadowDirection::Centered: break;
+    }
+    float drop = set.tileShadowDistance * kTileShadowDropStep * t;
+    int shiftX = (int)std::lround(dx * drop), shiftY = (int)std::lround(dy * drop);
     for (int y = 0; y < size; y++) {
         for (int x = 0; x < size; x++) {
-            float a = y >= drop ? shadow[(size_t)(y - drop) * size + x] : 0;
+            int fromX = x - shiftX, fromY = y - shiftY;
+            bool inside = fromX >= 0 && fromY >= 0 && fromX < size && fromY < size;
+            float a = inside ? shadow[(size_t)fromY * size + fromX] : 0;
             BYTE* p = &out.pixels[((size_t)y * size + x) * 4];
             p[0] = p[1] = p[2] = 0;
-            p[3] = (BYTE)std::lround(a * kTileShadowOpacity * 255);
+            p[3] = (BYTE)std::lround(a * opacity * 255);
         }
     }
     {
         gp::Bitmap canvas(size, size, size * 4, PixelFormat32bppPARGB, out.pixels.data());
         gp::Graphics g(&canvas);
         g.SetSmoothingMode(gp::SmoothingModeAntiAlias);
-        gp::TextureBrush brush(&face);
+        // Mirrored past its edges, not repeated: the soft edge of the shape
+        // reaches just past the face, and would show the far side's color
+        // there, as a thin line along the bottom of a tile lighter at the top.
+        gp::TextureBrush brush(&face, gp::WrapModeTileFlipXY);
         brush.TranslateTransform(o, o);
         g.FillPath(&brush, &path);
+    }
+    ApplyTileVibrance(out.pixels);
+    ApplyTileSheen(out.pixels, size, shape, o, (float)t);
+    ApplyTileEdges(out.pixels, size, shape, (float)t);
+    return out;
+}
+
+// ---- Icons that came back small ----
+// "Use High Resolution Icons" has the taskbar load icons at the dock's fully
+// magnified size. An app that gives Windows only a small icon gets it back
+// unenlarged, in the middle of an image that size, and would look tiny. Such an
+// icon is swapped for the one Start shows for the app, or, if that's small
+// too, enlarged.
+
+constexpr float kUndersizedArtwork = 0.5f;  // of its image, below which an icon came back small
+constexpr float kEnlargedArtwork = 0.875f;  // a small icon's artwork, enlarged, of its image
+
+// The box around what's shown of `w` x `h` premultiplied BGRA pixels;
+// `right` < `left` if nothing is.
+RECT ShownBounds(std::vector<BYTE> const& pixels, int w, int h) {
+    RECT r{w, h, -1, -1};
+    if (pixels.size() < (size_t)w * h * 4) return r;
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            if (pixels[((size_t)y * w + x) * 4 + 3] < kAlphaShown) continue;
+            r.left = std::min<LONG>(r.left, x), r.right = std::max<LONG>(r.right, x);
+            r.top = std::min<LONG>(r.top, y), r.bottom = std::max<LONG>(r.bottom, y);
+        }
+    }
+    return r;
+}
+
+bool Undersized(std::vector<BYTE> const& pixels, int w, int h) {
+    RECT r = ShownBounds(pixels, w, h);
+    if (r.right < r.left) return false;
+    int side = std::max(r.right - r.left, r.bottom - r.top) + 1;
+    return side < kUndersizedArtwork * std::max(w, h);
+}
+
+// The artwork of an icon that came back small, enlarged to fill as much of a
+// square image as other icons' do. Softer than they are, but the same size.
+IconPixels EnlargeArtwork(std::vector<BYTE> source, int w, int h) {
+    namespace gp = Gdiplus;
+    RECT r = ShownBounds(source, w, h);
+    if (r.right < r.left || !EnsureGdiplus()) return {};
+    // Its soft edge too, just past what counts as shown.
+    r.left = std::max<LONG>(0, r.left - 1), r.top = std::max<LONG>(0, r.top - 1);
+    r.right = std::min<LONG>(w - 1, r.right + 1), r.bottom = std::min<LONG>(h - 1, r.bottom + 1);
+    int bw = r.right - r.left + 1, bh = r.bottom - r.top + 1, size = std::max(w, h);
+    float k = size * kEnlargedArtwork / std::max(bw, bh);
+    IconPixels out{size, std::vector<BYTE>((size_t)size * size * 4)};
+    gp::Bitmap icon(w, h, w * 4, PixelFormat32bppPARGB, source.data());
+    gp::Bitmap canvas(size, size, size * 4, PixelFormat32bppPARGB, out.pixels.data());
+    {
+        gp::Graphics g(&canvas);
+        g.SetInterpolationMode(gp::InterpolationModeHighQualityBicubic);
+        g.SetPixelOffsetMode(gp::PixelOffsetModeHalf);
+        gp::ImageAttributes edges;
+        // Clear past the artwork's box (left out, the color is opaque black).
+        edges.SetWrapMode(gp::WrapModeClamp, gp::Color(0, 0, 0, 0));
+        gp::RectF at((size - bw * k) / 2, (size - bh * k) / 2, bw * k, bh * k);
+        g.DrawImage(&icon, at, (gp::REAL)r.left, (gp::REAL)r.top, (gp::REAL)bw, (gp::REAL)bh,
+                    gp::UnitPixel, &edges);
     }
     return out;
 }
 
 // Tiles by the taskbar's icon they were made from. The taskbar can load another
 // icon into one it has, so each is also by what it loaded from, and forgotten
-// when it loads anew (see StockWatch).
+// when it loads anew (see StockWatch). And it can give a button, bitmap and
+// all, to another app, so each is also by the app it was made for.
 struct CachedTile {
     wuxm::ImageSource icon{nullptr};
     std::wstring uri;
+    std::wstring appId;
     wuxm::ImageSource tile{nullptr};
     bool stale = false;
     StockWatch watch;
@@ -3263,20 +4420,22 @@ void ForgetCachedSquircle(wf::IInspectable const& icon, std::wstring const& uri)
     }
 }
 
-wuxm::ImageSource CachedSquircle(wuxm::ImageSource const& stock) {
+wuxm::ImageSource CachedSquircle(wuxm::ImageSource const& stock, std::wstring const& appId) {
     if (!stock) return nullptr;
     auto uri = UriText(stock);
     for (auto& c : g_squircleCache) {
-        if (!c.stale && c.icon == stock && c.uri == uri) return c.tile;
+        if (!c.stale && c.icon == stock && c.uri == uri && c.appId == appId) return c.tile;
     }
     return nullptr;
 }
 
-void CacheSquircle(wuxm::ImageSource const& stock, wuxm::ImageSource const& tile) {
+void CacheSquircle(wuxm::ImageSource const& stock, std::wstring const& appId,
+                   wuxm::ImageSource const& tile) {
     g_squircleCache.remove_if([&](CachedTile const& c) { return c.stale || c.icon == stock; });
     auto& c = g_squircleCache.emplace_front();
     c.icon = stock;
     c.uri = UriText(stock);
+    c.appId = appId;
     c.tile = tile;
     c.watch.Watch(stock, [](wf::IInspectable const& sender) {
         ForgetCachedSquircle(sender, UriText(sender.try_as<wuxm::ImageSource>()));
@@ -3289,9 +4448,30 @@ void CacheSquircle(wuxm::ImageSource const& stock, wuxm::ImageSource const& tile
 void RecolorSquircles(Settings const& old) {
     auto& s = g_settings;
     bool same = old.size == s.size && old.scale == s.scale && old.tileColor == s.tileColor &&
+                std::equal(std::begin(s.tileLightColor), std::end(s.tileLightColor),
+                           std::begin(old.tileLightColor)) &&
+                std::equal(std::begin(s.tileDarkColor), std::end(s.tileDarkColor),
+                           std::begin(old.tileDarkColor)) &&
+                old.tileVibrance == s.tileVibrance &&
+                old.tileSheen == s.tileSheen && old.tileSheenOpacity == s.tileSheenOpacity &&
+                old.tileSheenSize == s.tileSheenSize &&
+                old.tileEdges == s.tileEdges && old.tileShadowSpread == s.tileShadowSpread &&
+                old.tileShadowDistance == s.tileShadowDistance &&
+                old.tileShadowOpacity == s.tileShadowOpacity &&
+                old.tileShadowDirection == s.tileShadowDirection &&
+                old.tileCorner == s.tileCorner && old.tileCornerRadius == s.tileCornerRadius &&
                 (s.tileColor != TileColor::Custom ||
                  std::equal(std::begin(s.tileCustomColor), std::end(s.tileCustomColor),
                             std::begin(old.tileCustomColor)));
+    // Plain icons are looked at again at the new size.
+    if (old.size != s.size || old.scale != s.scale) {
+        for (auto& swap : g_iconSwaps) {
+            if (swap.look != IconLook::Plain) continue;
+            swap.shown = nullptr;
+            swap.checked = false;
+            swap.retries = 0;
+        }
+    }
     if (same) return;
     g_squircleCache.clear();
     for (auto& swap : g_iconSwaps) {
@@ -3355,9 +4535,7 @@ void WaitForIconsToSettle() {
         g_iconsSettling = false;
         for (auto& s : g_iconSwaps) {
             auto image = s.image.get();
-            if (image && s.look == IconLook::Squircle && !s.shown) {
-                Try([&] { UpdateSwap(s, image); }, L"Squircle icon");
-            }
+            if (image && NeedsPixels(s)) Try([&] { UpdateSwap(s, image); }, L"Squircle icon");
         }
     });
     g_iconsSettleTimer.Start();
@@ -3387,18 +4565,11 @@ void OnStockChanged(wf::IInspectable const& sender) {
     auto uri = UriText(sender.try_as<wuxm::ImageSource>());
     ForgetCachedSquircle(sender, uri);
     for (auto& s : g_iconSwaps) {
-        if (s.look != IconLook::Squircle || !s.stock || s.stock != sender) continue;
-        if (s.shown && !uri.empty() && uri == s.tileUri) continue;  // the same icon again
+        if (s.look != IconLook::Squircle && s.look != IconLook::Plain) continue;
+        if (!s.stock || s.stock != sender) continue;
+        if ((s.shown || s.checked) && !uri.empty() && uri == s.tileUri) continue;  // the same again
         NoteIconChange();
-        if (s.render) Try([&] { s.render.Cancel(); });
-        s.render = nullptr;
-        s.rendering = false;
-        s.generation++;
-        s.shown = nullptr;
-        s.tileUri.clear();
-        s.retry = false;
-        s.retries = 0;
-        s.renderParent = false;
+        ResetSwap(s);
         if (auto image = s.image.get()) UpdateSwap(s, image);
     }
 }
@@ -3410,6 +4581,7 @@ void ArmSquircleRetry() {
     auto next = std::chrono::steady_clock::time_point::max();
     for (auto& s : g_iconSwaps) {
         if (s.retry) next = std::min(next, s.retryAt);
+        if (s.hidden.get()) next = std::min(next, s.hiddenUntil);
     }
     if (next == std::chrono::steady_clock::time_point::max()) {
         KillTimer(window, kSquircleRetryTimer);
@@ -3424,6 +4596,7 @@ void ArmSquircleRetry() {
 void RetrySquircles() {
     auto now = std::chrono::steady_clock::now();
     for (auto& s : g_iconSwaps) {
+        if (s.hidden.get() && s.hiddenUntil <= now) ShowIconAgain(s);  // its tile's too slow
         if (!s.retry || s.retryAt > now) continue;
         s.retry = false;
         if (auto image = s.image.get()) Try([&] { UpdateSwap(s, image); }, L"Squircle icon");
@@ -3510,19 +4683,7 @@ bool IsLocalPath(std::wstring const& path) {
 // the shell blocks while it reads an icon, so a program that isn't on a local
 // drive is skipped: a slow or offline share would freeze the taskbar.
 std::vector<BYTE> AppIconPixels(std::wstring const& appId, int px, int& w, int& h) {
-    std::wstring path;
-    if (appId.size() > 38 && appId[0] == L'{' && appId[37] == L'}') {
-        GUID folder;
-        PWSTR folderPath = nullptr;
-        // Not verified: that would check a redirected folder on its server.
-        if (SUCCEEDED(CLSIDFromString(appId.substr(0, 38).c_str(), &folder)) &&
-            SUCCEEDED(SHGetKnownFolderPath(folder, KF_FLAG_DONT_VERIFY, nullptr, &folderPath))) {
-            path = folderPath + appId.substr(38);
-        }
-        CoTaskMemFree(folderPath);
-    } else if (appId.find(L":\\") != std::wstring::npos || appId.rfind(L"\\\\", 0) == 0) {
-        path = appId;
-    }
+    std::wstring path = AppIdPath(appId);
     if (!path.empty() && !IsLocalPath(path)) {
         Wh_Log(L"Not reading Start's icon for %s: not on a local drive", appId.c_str());
         return {};
@@ -3530,6 +4691,64 @@ std::vector<BYTE> AppIconPixels(std::wstring const& appId, int px, int& w, int& 
     auto pixels = ShellIconPixels(L"shell:AppsFolder\\" + appId, px, w, h);
     if (!pixels.empty() || path.empty()) return pixels;
     return ShellIconPixels(path, px, w, h);
+}
+
+// `w` x `h` pixels as a squircle tile, as an image to show; none if there's
+// nothing to see in them.
+wuxm::ImageSource PixelsTile(std::vector<BYTE> pixels, int w, int h) {
+    wuxm::ImageSource result{nullptr};
+    if (pixels.empty()) return result;
+    IconPixels tile = MakeSquircleIcon(std::move(pixels), w, h);
+    if (tile.size) {
+        Try([&] { result = BitmapFromPixels(tile.size, tile.size, tile.pixels); }, L"Icon tile");
+    }
+    return result;
+}
+
+// An image file as a tile, its artwork `px` across.
+wuxm::ImageSource FileTile(std::wstring const& path, int px) {
+    int w = 0, h = 0;
+    auto pixels = LoadImagePixels(path, px, w, h);
+    return PixelsTile(std::move(pixels), w, h);
+}
+
+// Start's own tile, without an icon of the user's: a square of four blues, no
+// gaps between them, lightest at the top left and darkest at the bottom right,
+// as Windows' logo is shaded. Square, it's trimmed to the tile's shape.
+wuxm::ImageSource StartTile(int px) {
+    constexpr BYTE kBlues[4][3] = {
+        {0x4F, 0xB8, 0xF8},  // top left
+        {0x2C, 0x9B, 0xEF},  // top right
+        {0x17, 0x82, 0xE2},  // bottom left
+        {0x0A, 0x63, 0xC9},  // bottom right
+    };
+    if (px <= 0) return nullptr;
+    std::vector<BYTE> pixels((size_t)px * px * 4);
+    for (int y = 0; y < px; y++) {
+        for (int x = 0; x < px; x++) {
+            auto const& rgb = kBlues[(2 * y >= px ? 2 : 0) + (2 * x >= px ? 1 : 0)];
+            BYTE* p = &pixels[((size_t)y * px + x) * 4];
+            p[0] = rgb[2];
+            p[1] = rgb[1];
+            p[2] = rgb[0];
+            p[3] = 255;
+        }
+    }
+    return PixelsTile(std::move(pixels), px, px);
+}
+
+// For an icon that came back small: the app's icon as Start shows it, in its
+// place, if Start's isn't small too. Whether it was.
+bool UseStartIcon(IconSwap& s, wuxc::Image const& image, std::vector<BYTE>& pixels, int& w,
+                  int& h) {
+    if (s.appId.empty()) return false;
+    int sw = 0, sh = 0;
+    auto start = AppIconPixels(s.appId, MagnifiedPixels(image, 1), sw, sh);
+    if (start.empty() || Undersized(start, sw, sh)) return false;
+    pixels = std::move(start);
+    w = sw;
+    h = sh;
+    return true;
 }
 
 // A tile from the app's icon as Start shows it, for an icon the taskbar's never
@@ -3546,7 +4765,7 @@ bool SquircleFromShell(IconSwap& s, wuxc::Image const& image) {
     s.shown = BitmapFromPixels(tile.size, tile.size, tile.pixels);
     s.tileUri = UriText(s.stock);
     ShowSwap(s, image);
-    Wh_Log(L"Squircle icon for %s made from Start's icon", appId.c_str());
+    ShowIconAgain(s);
     return true;
 }
 
@@ -3556,7 +4775,7 @@ bool SquircleFromShell(IconSwap& s, wuxc::Image const& image) {
 // can be.
 void RetrySquircleSoon(IconSwap& s) {
     ++s.retries;
-    if (s.retries == kSquircleRetries + 1) {
+    if (s.retries == kSquircleRetries + 1 && s.look == IconLook::Squircle) {
         auto image = s.image.get();
         if (image && SquircleFromShell(s, image)) return;
     }
@@ -3579,19 +4798,52 @@ void OnStockPixels(winrt::weak_ref<wuxc::Image> const& weak, wuxm::ImageSource c
     if (!s || s->generation != generation) return;  // gone, or its icon changed since
     s->rendering = false;
     s->render = nullptr;
-    if (s->stock != stock || s->look != IconLook::Squircle) return UpdateSwap(*s, image);
+    bool plain = s->look == IconLook::Plain;
+    if (s->stock != stock || (s->look != IconLook::Squircle && !plain)) {
+        return UpdateSwap(*s, image);
+    }
     if (refused && !s->renderParent) {
         s->renderParent = true;
+        if (s->hidden.get()) HideTillMade(*s, image);
         return RetrySquircleSoon(*s);
     }
+    if (pixels.empty() || w <= 0 || h <= 0) return RetrySquircleSoon(*s);
+    if (RECT r = ShownBounds(pixels, w, h); r.right < r.left) {
+        // Nothing drawn, maybe as hiding it hid it from the drawing too:
+        // shown, and tried again.
+        ShowIconAgain(*s);
+        return RetrySquircleSoon(*s);
+    }
+    bool small = Undersized(pixels, w, h);
+    bool fromStart = small && UseStartIcon(*s, image, pixels, w, h);
+    if (small) {
+        Wh_Log(L"Icon for %s came back small: %s", s->appId.c_str(),
+               fromStart ? L"Start's used instead" : L"enlarged");
+    }
 
-    IconPixels tile;
-    if (!pixels.empty() && w > 0 && h > 0) tile = MakeSquircleIcon(std::move(pixels), w, h);
+    if (plain) {
+        s->checked = true;
+        s->tileUri = UriText(stock);
+        ShowIconAgain(*s);
+        if (!small) return;  // the taskbar's own is fine
+        if (fromStart) {
+            s->shown = BitmapFromPixels(w, h, pixels);
+        } else {
+            IconPixels big = EnlargeArtwork(std::move(pixels), w, h);
+            if (!big.size) return;
+            s->shown = BitmapFromPixels(big.size, big.size, big.pixels);
+        }
+        return ShowSwap(*s, image);
+    }
+
+    // A tile scales the artwork up anyway, but Start's icon is sharper.
+    IconPixels tile = MakeSquircleIcon(std::move(pixels), w, h);
     if (!tile.size) return RetrySquircleSoon(*s);
     s->shown = BitmapFromPixels(tile.size, tile.size, tile.pixels);
     s->tileUri = UriText(stock);
-    CacheSquircle(stock, s->shown);
+    CacheSquircle(stock, s->appId, s->shown);
     ShowSwap(*s, image);
+    ShowIconAgain(*s);
 }
 
 std::vector<BYTE> BufferBytes(wss::IBuffer const& buffer) {
@@ -3632,6 +4884,7 @@ std::vector<BYTE> CropPixels(std::vector<BYTE> const& pixels, int& w, int& h, wf
 // holds it, cut down to the icon.
 void RequestSquircle(IconSwap& s, wuxc::Image const& image) {
     if (s.rendering || !s.stock || s.retries > kSquircleRetries + kSquircleSlowRetries) return;
+    if (std::chrono::steady_clock::now() < s.waitUntil) return;  // on the retry timer
     if (g_iconsSettling) return WaitForIconsToSettle();
     if (image.Source() != s.stock) return;
     if (image.ActualWidth() <= 0 || image.ActualHeight() <= 0) return RetrySquircleSoon(s);
@@ -5207,14 +6460,16 @@ void UpdateAutoHide(POINT p, RECT const& m, UINT dpi, bool held, bool fullscreen
 // =============================================================================
 // The name of the app under the pointer, above its icon as on a Mac, in place
 // of Windows' tooltips. It rises above the taskbar, so it's a click-through
-// window of its own: a solid light pill with a soft glow.
+// window of its own: a solid light pill with a soft glow or shadow along each
+// side, as squircle icons have, and a tail at the icon. Its color, font and size, its corners'
+// radius, the tail and the glows (or shadows) along each side are the user's,
+// in "Tooltips", and the Ctrl+I cards (below) share them.
 
+// Its sizes, in view pixels, at kLabelFontSize; they grow with "Font Size".
 constexpr float kLabelHeight = 30;       // the box, without its arrow
 constexpr float kLabelPadX = 11;
 constexpr float kLabelFontSize = 14;
-constexpr float kLabelGlowReach = 0.3f;     // inner glow, as a share of the height
-constexpr float kLabelGlowStrength = 0.24f; // inner glow, as a share of the fill's opacity
-constexpr float kLabelArrow = 7.5f;      // arrow height
+constexpr float kLabelArrow = 7.5f;      // arrow height, when it's shown
 constexpr float kLabelArrowHalf = 8.5f;  // half the arrow's width
 constexpr float kLabelArrowTip = 2;      // rounding at its tip
 constexpr float kLabelArrowBase = 4.5f;  // rounding where it meets the pill
@@ -5292,20 +6547,52 @@ HWND EnsureLabelWindow() {
     return g_label.hwnd;
 }
 
+void ForgetLabelFont();
+extern winrt::com_ptr<IDWriteFactory> g_dwrite;
+
 void DestroyLabel() {
     if (g_label.hwnd) DestroyWindow(g_label.hwnd);
     g_label = {};
+    ForgetLabelFont();
+    g_dwrite = nullptr;
 }
 
 // ---- Drawing ----
 
-// A pill and its arrow as one shape. The arrow's three corners are rounded.
-void LabelShape(Gdiplus::GraphicsPath& path, float w, float h, float scale) {
+// How much bigger than at kLabelFontSize the label is, by "Font Size": its
+// height, padding and arrow grow with its text.
+float LabelGrowth() {
+    return g_settings.tooltipFontSize / kLabelFontSize;
+}
+
+// The label's height, without its arrow, in view pixels.
+float LabelHeight() {
+    return kLabelHeight * LabelGrowth();
+}
+
+// The arrow's height under the label and cards, in view pixels: none with
+// "Show Tail" off.
+float LabelArrow() {
+    return g_settings.tooltipTail ? kLabelArrow * LabelGrowth() : 0;
+}
+
+// The corners' radius of a label `h` pixels tall: "Corner Radius" of its
+// height, up to fully round ends.
+float LabelRadius(float h) {
+    return std::min(g_settings.tooltipRadius / 100.0f * h, (h - 1) / 2);
+}
+
+// A box `h` tall with corners `radius` round, and, with "Show Tail" on, its
+// arrow, at `cx`, sized by `arrowScale`, as one shape. The arrow's three
+// corners are rounded.
+void BubbleShape(Gdiplus::GraphicsPath& path, float w, float h, float radius, float cx,
+                 float arrowScale) {
     using Gdiplus::PointF;
-    float i = 0.5f, d = h - 2 * i, b = h - i;  // fully round ends; b is the pill's bottom
-    float cx = w / 2, tipRound = kLabelArrowTip * scale, baseRound = kLabelArrowBase * scale;
-    PointF right{cx + kLabelArrowHalf * scale, b}, tip{cx, b + kLabelArrow * scale};
-    PointF left{cx - kLabelArrowHalf * scale, b};
+    // A square corner is drawn as a tiny round one.
+    float i = 0.5f, d = std::max(2 * radius, 0.5f), b = h - i;  // b is the box's bottom
+    float tipRound = kLabelArrowTip * arrowScale, baseRound = kLabelArrowBase * arrowScale;
+    PointF right{cx + kLabelArrowHalf * arrowScale, b}, tip{cx, b + kLabelArrow * arrowScale};
+    PointF left{cx - kLabelArrowHalf * arrowScale, b};
 
     // `distance` from `from` toward `to`.
     auto toward = [](PointF from, PointF to, float distance) {
@@ -5320,104 +6607,413 @@ void LabelShape(Gdiplus::GraphicsPath& path, float w, float h, float scale) {
 
     path.AddArc(i, i, d, d, 180, 90);
     path.AddArc(w - i - d, i, d, d, 270, 90);
-    path.AddArc(w - i - d, i, d, d, 0, 90);
-    corner(PointF{right.X + baseRound, b}, right, toward(right, tip, baseRound));
-    corner(toward(tip, right, tipRound), tip, toward(tip, left, tipRound));
-    corner(toward(left, tip, baseRound), left, PointF{left.X - baseRound, b});
-    path.AddArc(i, i, d, d, 90, 90);
+    path.AddArc(w - i - d, b - d, d, d, 0, 90);
+    if (g_settings.tooltipTail) {
+        corner(PointF{right.X + baseRound, b}, right, toward(right, tip, baseRound));
+        corner(toward(tip, right, tipRound), tip, toward(tip, left, tipRound));
+        corner(toward(left, tip, baseRound), left, PointF{left.X - baseRound, b});
+    }
+    path.AddArc(i, b - d, d, d, 90, 90);
     path.CloseFigure();
 }
 
-// The label's font, at the screen's `scale`.
-struct LabelFont {
-    Gdiplus::FontFamily family{L"Segoe UI"};
-    Gdiplus::Font font;
-    Gdiplus::StringFormat format;
+// The fill, the tooltip color.
+Color BubbleFill() {
+    auto [r, g, b] = g_settings.tooltipColor;
+    return {255, r, g, b};
+}
 
-    explicit LabelFont(float scale)
-        : font(&family, kLabelFontSize * scale, Gdiplus::FontStyleRegular, Gdiplus::UnitPixel) {
-        format.SetAlignment(Gdiplus::StringAlignmentCenter);
-        format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
-        format.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);
+// The shape in `path`, filled, and each side's glow or shadow over it, as set,
+// following its corners and arrow round as squircle tiles' do. The window's
+// `w` by `h`; `reference` is the label's height on screen, which the glows'
+// sizes are shares of.
+void FillBubble(Gdiplus::Graphics& g, Gdiplus::GraphicsPath& path, int w, int h,
+                float reference) {
+    namespace gp = Gdiplus;
+    Color fill = BubbleFill();
+    gp::SolidBrush brush(GdiColor(fill));
+    g.FillPath(&brush, &path);
+
+    std::array<InnerEdge, 4> edges;
+    bool any = false;
+    for (size_t side = 0; side < edges.size(); side++) {
+        TileEdge const& edge = g_settings.tooltipEdges[side];
+        if (edge.opacity <= 0 || edge.size <= 0) continue;
+        auto [r, gr, b] = edge.color;
+        edges[side] = {{255, r, gr, b}, edge.opacity / 100.0f, edge.size / 100.0f * reference};
+        any = true;
     }
+    if (!any || w <= 0 || h <= 0) return;
+
+    // The shape's coverage, drawn on its own, then the glows, drawn over the fill.
+    gp::Bitmap layer(w, h, PixelFormat32bppPARGB);
+    {
+        gp::Graphics m(&layer);
+        m.SetSmoothingMode(gp::SmoothingModeAntiAlias);
+        m.Clear(gp::Color(0, 0, 0, 0));
+        gp::SolidBrush solid(gp::Color(255, 255, 255, 255));
+        m.FillPath(&solid, &path);
+    }
+    gp::Rect all(0, 0, w, h);
+    gp::BitmapData data;
+    if (layer.LockBits(&all, gp::ImageLockModeRead | gp::ImageLockModeWrite,
+                       PixelFormat32bppPARGB, &data) != gp::Ok) {
+        return;
+    }
+    std::vector<float> shape((size_t)w * h);
+    for (int y = 0; y < h; y++) {
+        auto row = (BYTE const*)data.Scan0 + (size_t)y * data.Stride;
+        for (int x = 0; x < w; x++) shape[(size_t)y * w + x] = row[x * 4 + 3] / 255.0f;
+    }
+    std::vector<BYTE> pixels(shape.size() * 4, 0);
+    ApplyInnerEdges(pixels, w, h, shape, edges);
+    for (int y = 0; y < h; y++) {
+        memcpy((BYTE*)data.Scan0 + (size_t)y * data.Stride, &pixels[(size_t)y * w * 4], w * 4);
+    }
+    layer.UnlockBits(&data);
+    g.DrawImage(&layer, 0, 0, w, h);
+}
+
+// Its text's color, dark or light against the fill.
+Color LabelInk() {
+    auto [r, g, b] = g_settings.tooltipColor;
+    return IsLightColor(r, g, b) ? kLabelInkOnLight : kLabelInkOnDark;
+}
+
+// ---- The user's font ----
+// With "Font" set to a font that's installed, or to a font file, the label's
+// and cards' text is drawn with DirectWrite, which, unlike GDI+, also takes
+// OpenType fonts with PostScript outlines (many .otf files). Otherwise it's
+// Segoe UI, by GDI+.
+
+template <typename F>
+F LoadSystemFunction(PCWSTR dll, PCSTR name);
+
+struct LabelDWrite {
+    bool checked = false;  // whether "Tooltip Font" has been looked for
+    std::wstring family;   // as found; empty for Segoe UI
+    winrt::com_ptr<IDWriteFontCollection> fonts;  // a file's; null for the installed ones
+    DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_REGULAR;
+    DWRITE_FONT_STYLE style = DWRITE_FONT_STYLE_NORMAL;
+    DWRITE_FONT_STRETCH stretch = DWRITE_FONT_STRETCH_NORMAL;
+    std::map<std::pair<float, bool>, winrt::com_ptr<IDWriteTextFormat>> formats;  // size, bold
+    winrt::com_ptr<ID2D1DCRenderTarget> target;
 };
 
-// How wide `text` is drawn. The label is placed each frame while icons move,
-// so it's measured again only when the name or the scale changes.
-float LabelTextWidth(std::wstring const& text, float scale) {
-    static std::wstring measuredText;
-    static float measuredScale = 0, measuredWidth = 0;
-    if (text == measuredText && scale == measuredScale) return measuredWidth;
+winrt::com_ptr<IDWriteFactory> g_dwrite;
+LabelDWrite g_labelFont;
+
+// Looked for again as the settings change, as fonts may have been installed.
+void ForgetLabelFont() {
+    g_labelFont = {};
+}
+
+// A weight's name, as fonts' names end with, or 0 if `word` isn't one.
+int WeightNamed(std::wstring_view word) {
+    static constexpr std::pair<PCWSTR, int> kWeights[] = {
+        {L"Thin", 100},     {L"Hairline", 100},  {L"ExtraLight", 200}, {L"UltraLight", 200},
+        {L"Light", 300},    {L"SemiLight", 350}, {L"Regular", 400},    {L"Normal", 400},
+        {L"Book", 400},     {L"Medium", 500},    {L"SemiBold", 600},   {L"DemiBold", 600},
+        {L"Bold", 700},     {L"ExtraBold", 800}, {L"UltraBold", 800},  {L"Heavy", 800},
+        {L"Black", 900},    {L"ExtraBlack", 950}};
+    for (auto [name, weight] : kWeights) {
+        if (word.size() == wcslen(name) && !_wcsnicmp(word.data(), name, word.size())) {
+            return weight;
+        }
+    }
+    return 0;
+}
+
+// Whether "Tooltip Font" is a file's path rather than a font's name.
+bool IsFontPath(std::wstring const& text) {
+    static constexpr PCWSTR kExtensions[] = {L".ttf", L".otf", L".ttc", L".otc"};
+    return text.find_first_of(L"\\/") != text.npos ||
+           std::any_of(std::begin(kExtensions), std::end(kExtensions),
+                       [&](PCWSTR end) { return EndsWithNoCase(text, end); });
+}
+
+// The family's name, in English if it has one.
+std::wstring FamilyName(IDWriteFontFamily* family) {
+    winrt::com_ptr<IDWriteLocalizedStrings> names;
+    winrt::check_hresult(family->GetFamilyNames(names.put()));
+    UINT32 index = 0, length = 0;
+    BOOL exists = FALSE;
+    if (FAILED(names->FindLocaleName(L"en-us", &index, &exists)) || !exists) index = 0;
+    winrt::check_hresult(names->GetStringLength(index, &length));
+    std::wstring name(length + 1, L'\0');
+    winrt::check_hresult(names->GetString(index, name.data(), length + 1));
+    name.resize(length);
+    return name;
+}
+
+// The font in the file at `path`, as a collection of its own: its regular
+// weight, or the nearest it has.
+void LoadLabelFontFile(std::wstring const& typed) {
+    std::wstring path = ExpandVariables(typed);
+    DWORD attributes = GetFileAttributesW(path.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        Wh_Log(L"Tooltip font: no file at %s, so Segoe UI instead", path.c_str());
+        return;
+    }
+    auto factory = g_dwrite.as<IDWriteFactory5>();  // Windows 10 1703 and later
+    winrt::com_ptr<IDWriteFontFile> file;
+    winrt::com_ptr<IDWriteFontSetBuilder1> builder;
+    winrt::com_ptr<IDWriteFontSet> set;
+    winrt::com_ptr<IDWriteFontCollection1> fonts;
+    winrt::check_hresult(factory->CreateFontFileReference(path.c_str(), nullptr, file.put()));
+    winrt::check_hresult(factory->CreateFontSetBuilder(builder.put()));
+    if (FAILED(builder->AddFontFile(file.get())) || FAILED(builder->CreateFontSet(set.put())) ||
+        FAILED(factory->CreateFontCollectionFromFontSet(set.get(), fonts.put())) ||
+        !fonts->GetFontFamilyCount()) {
+        Wh_Log(L"Tooltip font: %s isn't a font file Windows can use, so Segoe UI instead",
+               path.c_str());
+        return;
+    }
+    winrt::com_ptr<IDWriteFontFamily1> family;
+    winrt::com_ptr<IDWriteFont> font;
+    winrt::check_hresult(fonts->GetFontFamily(0, family.put()));
+    winrt::check_hresult(family->GetFirstMatchingFont(
+        DWRITE_FONT_WEIGHT_REGULAR, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
+        font.put()));
+    g_labelFont.family = FamilyName(family.get());
+    g_labelFont.fonts = fonts;
+    g_labelFont.weight = font->GetWeight();
+    g_labelFont.style = font->GetStyle();
+    g_labelFont.stretch = font->GetStretch();
+}
+
+// "Tooltip Font" as a font file, or among the installed fonts: as a family,
+// or, when it ends with a weight ("Segoe UI Semibold"), as the family before
+// it in that weight.
+void FindLabelFont() {
+    g_labelFont.checked = true;
+    std::wstring const& name = g_settings.tooltipFont;
+    if (name.empty()) return;
+    if (!g_dwrite) {
+        using Create = HRESULT(WINAPI*)(DWRITE_FACTORY_TYPE, REFIID, IUnknown**);
+        auto create = LoadSystemFunction<Create>(L"dwrite.dll", "DWriteCreateFactory");
+        winrt::check_hresult(create(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
+                                    reinterpret_cast<IUnknown**>(g_dwrite.put_void())));
+    }
+    if (IsFontPath(name)) return LoadLabelFontFile(name);
+    winrt::com_ptr<IDWriteFontCollection> fonts;
+    winrt::check_hresult(g_dwrite->GetSystemFontCollection(fonts.put(), TRUE));
+    auto installed = [&](std::wstring const& family) {
+        UINT32 index;
+        BOOL exists = FALSE;
+        return SUCCEEDED(fonts->FindFamilyName(family.c_str(), &index, &exists)) && exists;
+    };
+    if (installed(name)) {
+        g_labelFont.family = name;
+        return;
+    }
+    size_t space = name.find_last_of(L' ');
+    if (space != name.npos) {
+        int weight = WeightNamed(std::wstring_view(name).substr(space + 1));
+        std::wstring family = name.substr(0, name.find_last_not_of(L' ', space) + 1);
+        if (weight && !family.empty() && installed(family)) {
+            g_labelFont.family = family;
+            g_labelFont.weight = (DWRITE_FONT_WEIGHT)weight;
+            return;
+        }
+    }
+    Wh_Log(L"Tooltip font \"%s\" isn't installed: Segoe UI instead", name.c_str());
+}
+
+// ---- Text ----
+// The label's and cards' text is gathered as runs, each one line in a box, and
+// drawn after the shapes: by GDI+ in Segoe UI, or by DirectWrite in the user's
+// font, over what GDI+ drew.
+
+enum class TextAlign { Left, Center, Right };
+enum class TextTrim { None, End, Middle };  // where an ellipsis cuts it short, if it must
+
+struct TextRun {
+    std::wstring text;
+    float size = 0;  // pixels
+    bool bold = false;
+    float x = 0, y = 0, w = 0, h = 0;  // its box; the text's centered in it vertically
+    TextAlign align = TextAlign::Left;
+    TextTrim trim = TextTrim::None;
+    Color ink;
+};
+
+// Whether text's in the user's font, drawn by DirectWrite.
+bool UserFont() {
+    if (!g_labelFont.checked && !Try(FindLabelFont, L"Tooltip font")) {
+        g_labelFont.family.clear();
+    }
+    return !g_labelFont.family.empty();
+}
+
+// The user's font at `size` pixels, in its own weight or bold.
+IDWriteTextFormat* UserTextFormat(float size, bool bold) {
+    if (g_labelFont.formats.size() > 16) g_labelFont.formats.clear();  // old scales
+    auto& format = g_labelFont.formats[{size, bold}];
+    if (format) return format.get();
+    auto weight = g_labelFont.weight;
+    if (bold) weight = (DWRITE_FONT_WEIGHT)std::max<int>(weight, DWRITE_FONT_WEIGHT_BOLD);
+    winrt::com_ptr<IDWriteTextFormat> made;
+    winrt::check_hresult(g_dwrite->CreateTextFormat(
+        g_labelFont.family.c_str(), g_labelFont.fonts.get(), weight, g_labelFont.style,
+        g_labelFont.stretch, size, L"", made.put()));
+    winrt::check_hresult(made->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+    winrt::check_hresult(made->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+    format = made;
+    return format.get();
+}
+
+// `run` laid out in the user's font, in a box `w` wide.
+winrt::com_ptr<IDWriteTextLayout> UserTextLayout(TextRun const& run, float w) {
+    IDWriteTextFormat* format = UserTextFormat(run.size, run.bold);
+    winrt::com_ptr<IDWriteTextLayout> layout;
+    winrt::check_hresult(g_dwrite->CreateTextLayout(run.text.c_str(), (UINT32)run.text.size(),
+                                                    format, w, std::max(run.h, 1.0f),
+                                                    layout.put()));
+    layout->SetTextAlignment(run.align == TextAlign::Center  ? DWRITE_TEXT_ALIGNMENT_CENTER
+                             : run.align == TextAlign::Right ? DWRITE_TEXT_ALIGNMENT_TRAILING
+                                                             : DWRITE_TEXT_ALIGNMENT_LEADING);
+    if (run.trim != TextTrim::None) {
+        // In the middle, a path keeps its last part: its file's name.
+        bool middle = run.trim == TextTrim::Middle;
+        DWRITE_TRIMMING trimming{DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+                                 (UINT32)(middle ? L'\\' : 0), middle ? 1u : 0u};
+        winrt::com_ptr<IDWriteInlineObject> ellipsis;
+        winrt::check_hresult(g_dwrite->CreateEllipsisTrimmingSign(format, ellipsis.put()));
+        winrt::check_hresult(layout->SetTrimming(&trimming, ellipsis.get()));
+    }
+    return layout;
+}
+
+// How wide `text` is drawn, at `size` pixels.
+float TextWidth(std::wstring const& text, float size, bool bold = false) {
     namespace gp = Gdiplus;
-    LabelFont label(scale);
-    gp::RectF bounds;
+    if (text.empty()) return 0;
+    if (UserFont()) {
+        float width = 0;
+        bool measured = Try([&] {
+            TextRun run{text, size, bold};
+            run.h = size * 2;
+            DWRITE_TEXT_METRICS metrics{};
+            winrt::check_hresult(UserTextLayout(run, 100000)->GetMetrics(&metrics));
+            width = metrics.widthIncludingTrailingWhitespace;
+        }, L"Tooltip font");
+        if (measured) return width;
+        g_labelFont.family.clear();  // Segoe UI from now on
+    }
+    gp::FontFamily family(L"Segoe UI");
+    gp::Font font(&family, size, bold ? gp::FontStyleBold : gp::FontStyleRegular, gp::UnitPixel);
+    gp::StringFormat format;
+    format.SetFormatFlags(gp::StringFormatFlagsNoWrap);
     gp::Bitmap probe(1, 1, PixelFormat32bppPARGB);
     gp::Graphics g(&probe);
     g.SetTextRenderingHint(gp::TextRenderingHintAntiAliasGridFit);
-    g.MeasureString(text.c_str(), (INT)text.size(), &label.font, gp::PointF(0, 0), &label.format,
-                    &bounds);
-    measuredText = text;
-    measuredScale = scale;
-    measuredWidth = bounds.Width;
-    return measuredWidth;
+    gp::RectF bounds;
+    g.MeasureString(text.c_str(), (INT)text.size(), &font, gp::PointF(0, 0), &format, &bounds);
+    return bounds.Width;
 }
 
-// With its arrow's tip at `tip`, on screen.
-void DrawLabel(std::wstring const& text, POINT tip, float scale) {
+// `runs` in Segoe UI, by GDI+. Its bold, as it can give "Segoe UI Semibold"
+// in italics.
+void DrawTextRuns(Gdiplus::Graphics& g, std::vector<TextRun> const& runs) {
     namespace gp = Gdiplus;
-    int h = (int)std::round(kLabelHeight * scale);
-    // Never narrower than the round ends and the arrow's base, or a short name's
-    // arrow would run into the curves.
-    float minWidth = h + 2 * (kLabelArrowHalf + kLabelArrowBase) * scale;
-    int w = (int)std::ceil(std::max(LabelTextWidth(text, scale) + 2 * kLabelPadX * scale,
-                                    minWidth));
-    int height = h + (int)std::ceil(kLabelArrow * scale) + 1;
-    RECT rect{tip.x - w / 2, tip.y - height, tip.x - w / 2 + w, tip.y};
-    if (g_label.shown && text == g_label.text && EqualRect(&rect, &g_label.rect)) return;
+    gp::FontFamily family(L"Segoe UI");
+    for (auto const& run : runs) {
+        gp::Font font(&family, run.size, run.bold ? gp::FontStyleBold : gp::FontStyleRegular,
+                      gp::UnitPixel);
+        gp::StringFormat format;
+        format.SetAlignment(run.align == TextAlign::Center  ? gp::StringAlignmentCenter
+                            : run.align == TextAlign::Right ? gp::StringAlignmentFar
+                                                            : gp::StringAlignmentNear);
+        format.SetLineAlignment(gp::StringAlignmentCenter);
+        format.SetFormatFlags(gp::StringFormatFlagsNoWrap);
+        format.SetTrimming(run.trim == TextTrim::End      ? gp::StringTrimmingEllipsisCharacter
+                           : run.trim == TextTrim::Middle ? gp::StringTrimmingEllipsisPath
+                                                          : gp::StringTrimmingNone);
+        gp::SolidBrush ink(GdiColor(run.ink));
+        g.DrawString(run.text.c_str(), (INT)run.text.size(), &font,
+                     gp::RectF(run.x, run.y, run.w, run.h), &format, &ink);
+    }
+}
 
-    LabelFont label(scale);
+// `runs` in the user's font, by DirectWrite, over what's in `dc` (`w` by `h`)
+// already. Its render target is at 96 DPI, so its units are pixels.
+void DrawUserTextRuns(HDC dc, int w, int h, std::vector<TextRun> const& runs) {
+    auto& target = g_labelFont.target;
+    if (!target) {
+        auto props = D2D1::RenderTargetProperties(
+            D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+            D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
+        winrt::check_hresult(D2DFactory()->CreateDCRenderTarget(&props, target.put()));
+        // Layered windows have no ClearType: their pixels' alpha is their own.
+        target->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+    }
+    RECT box{0, 0, w, h};
+    winrt::check_hresult(target->BindDC(dc, &box));
+    target->BeginDraw();
+    HRESULT hr = S_OK;
+    try {
+        winrt::com_ptr<ID2D1SolidColorBrush> brush;
+        winrt::check_hresult(target->CreateSolidColorBrush(D2D1::ColorF(0, 0, 0), brush.put()));
+        for (auto const& run : runs) {
+            Color c = run.ink;
+            brush->SetColor(D2D1::ColorF(c.R / 255.0f, c.G / 255.0f, c.B / 255.0f, c.A / 255.0f));
+            target->DrawTextLayout({run.x, run.y}, UserTextLayout(run, run.w).get(), brush.get());
+        }
+    } catch (...) {
+        hr = winrt::to_hresult();
+    }
+    HRESULT ended = target->EndDraw();
+    if (FAILED(ended)) target = nullptr;  // made again next time
+    winrt::check_hresult(FAILED(hr) ? hr : ended);
+}
+
+// ---- Window's picture ----
+
+// Draws the label's window at `rect`, on screen, with `paint`, which draws its
+// shapes and gives its text, unless it shows `key` there already. With the
+// same `key` and size elsewhere, it's only moved there: a card's glows take a
+// while to draw, and the label follows its icon each frame.
+void PaintLabel(RECT const& rect, std::wstring const& key,
+                std::function<void(Gdiplus::Graphics&, std::vector<TextRun>&)> const& paint) {
+    namespace gp = Gdiplus;
+    int w = rect.right - rect.left, height = rect.bottom - rect.top;
+    if (g_label.shown && key == g_label.text) {
+        if (EqualRect(&rect, &g_label.rect)) return;
+        if (w == g_label.rect.right - g_label.rect.left &&
+            height == g_label.rect.bottom - g_label.rect.top &&
+            SetWindowPos(g_label.hwnd, nullptr, rect.left, rect.top, 0, 0,
+                         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE)) {
+            g_label.rect = rect;
+            return;
+        }
+    }
     BITMAPINFO bi{};
     bi.bmiHeader = {sizeof(BITMAPINFOHEADER), w, -height, 1, 32, BI_RGB};
     void* bits = nullptr;
     HDC screen = GetDC(nullptr);
     HDC dc = CreateCompatibleDC(screen);
     if (HBITMAP bmp = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, nullptr, 0)) {
-        {
-            gp::Bitmap canvas(w, height, w * 4, PixelFormat32bppPARGB, (BYTE*)bits);
-            gp::Graphics g(&canvas);
-            g.Clear(gp::Color(0, 0, 0, 0));
-            g.SetSmoothingMode(gp::SmoothingModeAntiAlias);
-            gp::GraphicsPath path;
-            LabelShape(path, (float)w, (float)h, scale);
-            auto [r, gr, b] = g_settings.tooltipColor;
-            Color fillColor{255, r, gr, b};
-            gp::SolidBrush fill(GdiColor(fillColor));
-            g.FillPath(&fill, &path);
-
-            // The dock's inner glow, flipped past the box's bottom into the arrow.
-            Color glow = GlowColor(fillColor, kLabelGlowStrength);
-            gp::Color colors[kGlowSteps * 2];
-            gp::REAL positions[kGlowSteps * 2];
-            int i = 0;
-            for (auto [offset, strength] : GlowStops(kLabelGlowReach)) {
-                Color color = glow;
-                color.A = (uint8_t)std::lround(glow.A * strength);
-                colors[i] = GdiColor(color);
-                positions[i++] = offset;
-            }
-            gp::LinearGradientBrush glowBrush(gp::PointF(0, 0), gp::PointF(0, (gp::REAL)h),
-                                              GdiColor(glow), GdiColor(glow));
-            glowBrush.SetInterpolationColors(colors, positions, kGlowSteps * 2);
-            glowBrush.SetWrapMode(gp::WrapModeTileFlipY);
-            g.FillPath(&glowBrush, &path);
-
-            Color ink = IsLightColor(r, gr, b) ? kLabelInkOnLight : kLabelInkOnDark;
-            gp::SolidBrush inkBrush(GdiColor(ink));
-            g.SetTextRenderingHint(gp::TextRenderingHintAntiAliasGridFit);
-            g.DrawString(text.c_str(), (INT)text.size(), &label.font,
-                         gp::RectF(0, 0, (gp::REAL)w, (gp::REAL)h), &label.format, &inkBrush);
-        }
         HGDIOBJ old = SelectObject(dc, bmp);
+        std::vector<TextRun> runs;
+        bool userFont = UserFont();
+        auto canvas = [&](auto&& draw) {
+            gp::Bitmap picture(w, height, w * 4, PixelFormat32bppPARGB, (BYTE*)bits);
+            gp::Graphics g(&picture);
+            g.SetSmoothingMode(gp::SmoothingModeAntiAlias);
+            g.SetTextRenderingHint(gp::TextRenderingHintAntiAliasGridFit);
+            draw(g);
+        };
+        canvas([&](gp::Graphics& g) {
+            g.Clear(gp::Color(0, 0, 0, 0));
+            paint(g, runs);
+            if (!userFont) DrawTextRuns(g, runs);
+        });
+        if (userFont &&
+            !Try([&] { DrawUserTextRuns(dc, w, height, runs); }, L"Tooltip font")) {
+            g_labelFont.family.clear();  // Segoe UI from now on
+            canvas([&](gp::Graphics& g) { DrawTextRuns(g, runs); });
+        }
         POINT pos{rect.left, rect.top}, zero{};
         SIZE size{w, height};
         BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
@@ -5432,7 +7028,464 @@ void DrawLabel(std::wstring const& text, POINT tip, float scale) {
         SetWindowPos(g_label.hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
-    g_label = {g_label.hwnd, text, rect, true};
+    g_label = {g_label.hwnd, key, rect, true};
+}
+
+// How wide the label's text is. The label follows its icon each frame, so it's
+// measured again only when the name, its size or the font changes.
+float LabelTextWidth(std::wstring const& text, float size) {
+    static std::wstring measuredText;
+    static float measuredSize = 0, measuredWidth = 0;
+    static int measuredVersion = -1;
+    if (text != measuredText || size != measuredSize || measuredVersion != g_settingsVersion) {
+        measuredWidth = TextWidth(text, size);
+        measuredText = text;
+        measuredSize = size;
+        measuredVersion = g_settingsVersion;
+    }
+    return measuredWidth;
+}
+
+// With its arrow's tip at `tip`, on screen.
+void DrawLabel(std::wstring const& text, POINT tip, float scale) {
+    namespace gp = Gdiplus;
+    float grown = scale * LabelGrowth();
+    int h = (int)std::round(kLabelHeight * grown);
+    float radius = LabelRadius((float)h);
+    // Never narrower than the round corners and the arrow's base, or a short
+    // name's arrow would run into the curves.
+    float minWidth = 2 * radius;
+    if (g_settings.tooltipTail) minWidth += 2 * (kLabelArrowHalf + kLabelArrowBase) * grown;
+    float size = g_settings.tooltipFontSize * scale;
+    int w = (int)std::ceil(
+        std::max(LabelTextWidth(text, size) + 2 * kLabelPadX * grown, minWidth));
+    int height = h + (int)std::ceil(LabelArrow() * scale) + 1;
+    RECT rect{tip.x - w / 2, tip.y - height, tip.x - w / 2 + w, tip.y};
+    std::wstring key = text + L"\x01" + std::to_wstring(scale);
+    PaintLabel(rect, key, [&](gp::Graphics& g, std::vector<TextRun>& runs) {
+        gp::GraphicsPath path;
+        BubbleShape(path, (float)w, (float)h, radius, w / 2.0f, grown);
+        FillBubble(g, path, w, height, (float)h);
+        TextRun run{text, size, false, 0, 0, (float)w, (float)h, TextAlign::Center};
+        run.ink = LabelInk();
+        runs.push_back(run);
+    });
+}
+
+// =============================================================================
+// INFO CARDS
+// =============================================================================
+// Ctrl+I over an icon in the dock turns its label into a card: the app's name,
+// its ID, its .exe, and which of the user's icons it shows. The ID is copied, to
+// paste into "App Icons"; Ctrl+I again copies the .exe instead, and so on in
+// turn. The card goes once the pointer leaves the icon, or on Esc.
+//
+// Ctrl+I is caught by a keyboard hook on a thread of its own (it must answer
+// quickly), which takes it only while the pointer's on an icon in the dock:
+// anywhere else, it goes to the app as usual. The hook sees every key, acts on
+// these two only, and keeps nothing.
+
+constexpr UINT kInfoKeyMessage = WM_APP + 8;    // Ctrl+I, over an icon
+constexpr UINT kInfoCloseMessage = WM_APP + 9;  // Esc, with a card open
+
+// Card sizes, in view pixels, apart from the label's own (see LABELS).
+constexpr float kCardPadX = 12;
+constexpr float kCardPadY = 8;
+constexpr float kCardRadius = 10;
+constexpr float kCardTitleSize = 14;
+constexpr float kCardTitleHeight = 24;
+constexpr float kCardTextSize = 12.5f;
+constexpr float kCardRowHeight = 21;
+constexpr float kCardFooterHeight = 24;
+constexpr float kCardLabelGap = 14;   // between a row's label and its value
+constexpr float kCardValueMax = 360;  // a longer value is cut short in the middle
+constexpr float kCardScreenEdge = 4;  // kept from the screen's edges
+constexpr uint8_t kCardDimInk = 150;  // the labels' and notes' opacity, of 255
+constexpr uint8_t kCardMarkInk = 26;  // the copied row's background's
+
+// The card's corners: as round as the label's, up to kCardRadius.
+float CardRadius(float scale) {
+    return std::min(kCardRadius * scale, LabelRadius(LabelHeight() * scale));
+}
+
+// The room the arrow needs from each side of the card, with its corners.
+float CardArrowRoom(float scale) {
+    float arrow = (kLabelArrowHalf + kLabelArrowBase) * scale * LabelGrowth();
+    return (g_settings.tooltipTail ? arrow : 0) + CardRadius(scale);
+}
+
+// What the pointer's over in the dock, as the last frame left it. The
+// keyboard's thread reads g_overDockIcon and g_overDockRect (the taskbar's
+// window): Ctrl+I is taken only while the pointer's still in there.
+struct Hovered {
+    winrt::weak_ref<wux::FrameworkElement> element;  // none for the Recycle Bin
+    bool trash = false;
+};
+Hovered g_hovered;
+std::atomic<bool> g_overDockIcon = false;
+std::mutex g_overDockLock;
+RECT g_overDockRect{};
+
+void SetOverDockIcon(wux::FrameworkElement const& el, bool trash, RECT const& window) {
+    g_hovered = {el ? winrt::make_weak(el) : nullptr, trash};
+    {
+        std::lock_guard lock(g_overDockLock);
+        g_overDockRect = window;
+    }
+    g_overDockIcon = true;
+}
+
+void ClearOverDockIcon() {
+    g_overDockIcon = false;
+    g_hovered = {};
+}
+
+struct InfoRow {
+    std::wstring label, value;
+    bool note = false;  // dimmed: not something to copy
+};
+
+struct InfoCard {
+    bool open = false;
+    winrt::weak_ref<wux::FrameworkElement> element;
+    bool trash = false;
+    std::wstring title, id, exe;  // the exe's file name
+    std::vector<InfoRow> rows;
+    int idRow = -1, exeRow = -1;  // where they are in `rows`
+    int copied = -1;              // the row last copied
+    bool copyFailed = false;
+};
+InfoCard g_info;
+std::atomic<bool> g_infoOpen = false;  // read by the keyboard's thread, for Esc
+
+bool InfoCardIsFor(wux::FrameworkElement const& el, bool trash) {
+    return g_info.open && g_info.trash == trash && (trash || g_info.element.get() == el);
+}
+
+void CloseInfoCard() {
+    if (!g_info.open) return;
+    g_info = {};
+    g_infoOpen = false;
+}
+
+// For an app: its ID and .exe; for anything else, where its icon's set.
+InfoCard MakeInfoCard(wux::FrameworkElement const& el, bool trash) {
+    InfoCard card;
+    card.open = true;
+    card.trash = trash;
+    if (el) card.element = winrt::make_weak(el);
+    auto note = [&](PCWSTR label, std::wstring value) {
+        card.rows.push_back({label, std::move(value), true});
+    };
+    if (trash) {
+        card.title = HasTrashIcon() ? L"Trash" : L"Recycle Bin";
+        note(L"Icon", L"Set in Custom Icons, as Empty and Full Trash Icon");
+        return card;
+    }
+    card.title = AppName(el);
+    if (IsStartButton(el)) {
+        if (card.title.empty()) card.title = L"Start";
+        note(L"Icon", L"Set in Custom Icons, as Start Menu Icon");
+        return card;
+    }
+    if (!IsAppButton(el)) {
+        note(L"Icon", L"Windows' own, which can't be changed");
+        return card;
+    }
+    card.id = ButtonAppId(el);
+    if (!card.id.empty()) {
+        // Its windows open now, then Start's shortcut, then its ID's own path.
+        LookAtWindows(true);
+        auto& exes = ExesOf(card.id);
+        AddWindowExes(card.id, exes);
+        std::wstring path = !exes.fromWindows.empty() ? exes.fromWindows.front()
+                            : !exes.fromShortcut.empty() ? exes.fromShortcut
+                                                         : exes.fromId;
+        card.exe = FileName(path);
+        card.idRow = (int)card.rows.size();
+        card.rows.push_back({L"ID", card.id});
+    }
+    if (!card.exe.empty()) {
+        card.exeRow = (int)card.rows.size();
+        card.rows.push_back({L".exe", card.exe});
+    } else {
+        note(L".exe", card.id.find(L'!') != card.id.npos ? L"None: it's a Store app"
+                                                         : L"None found");
+    }
+    AppMatch how;
+    if (HasFinderIcon() && IsFileExplorer(el)) {
+        note(L"Icon", L"Yours, from File Explorer Icon");
+    } else if (int i = AppIconFor(el, &how); i >= 0) {
+        PCWSTR by = how == AppMatch::Id ? L"ID" : how == AppMatch::Name ? L"name" : L".exe";
+        note(L"Icon", L"Yours, from App Icons entry " + std::to_wstring(i + 1) + L", by its " + by);
+    }
+    return card;
+}
+
+bool CopyText(std::wstring const& text) {
+    bool open = false;
+    for (int i = 0; i < 5 && !(open = OpenClipboard(g_modWindow)); i++) Sleep(10);
+    if (!open) return false;
+    bool copied = false;
+    if (EmptyClipboard()) {
+        size_t bytes = (text.size() + 1) * sizeof(wchar_t);
+        if (HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes)) {
+            if (void* p = GlobalLock(memory)) {
+                memcpy(p, text.c_str(), bytes);
+                GlobalUnlock(memory);
+                copied = SetClipboardData(CF_UNICODETEXT, memory) != nullptr;
+            }
+            if (!copied) GlobalFree(memory);
+        }
+    }
+    CloseClipboard();
+    return copied;
+}
+
+// The ID first, then the .exe, then the ID again.
+void CopyNext(InfoCard& card) {
+    std::vector<int> rows;
+    if (card.idRow >= 0) rows.push_back(card.idRow);
+    if (card.exeRow >= 0) rows.push_back(card.exeRow);
+    if (rows.empty()) return;
+    auto at = std::ranges::find(rows, card.copied);
+    int next = at == rows.end() || at + 1 == rows.end() ? rows.front() : *(at + 1);
+    std::wstring const& text = next == card.idRow ? card.id : card.exe;
+    card.copyFailed = !CopyText(text);
+    card.copied = card.copyFailed ? -1 : next;
+}
+
+// Ctrl+I: a card for what's under the pointer, or, with one open, the next
+// thing copied.
+void OnInfoKey() {
+    if (!g_overDockIcon) return;
+    auto el = g_hovered.element.get();
+    bool trash = g_hovered.trash;
+    if (!el && !trash) return;
+    if (!InfoCardIsFor(el, trash)) g_info = MakeInfoCard(el, trash);
+    CopyNext(g_info);
+    g_infoOpen = true;
+    StartFrames();  // drawn there
+}
+
+// A box from (x, y), `w` by `h`, with corners `r` round.
+void RoundedBox(Gdiplus::GraphicsPath& path, float x, float y, float w, float h, float r) {
+    float d = 2 * r;
+    path.AddArc(x, y, d, d, 180, 90);
+    path.AddArc(x + w - d, y, d, d, 270, 90);
+    path.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+    path.AddArc(x, y + h - d, d, d, 90, 90);
+    path.CloseFigure();
+}
+
+// What the card says, and its size, measured once per change: it's placed
+// each frame while icons move.
+struct CardLayout {
+    std::wstring key;
+    std::wstring copiedText, nextText;  // the footer, left and right
+    float labelWidth = 0;
+    int w = 0;
+    float h = 0;  // without its arrow
+};
+
+CardLayout const& LayOutInfoCard(float scale) {
+    namespace gp = Gdiplus;
+    static CardLayout layout;
+    InfoCard const& card = g_info;
+    std::wstring key = L"\x01" + card.title + L"\x02" + std::to_wstring(card.copied) +
+                       (card.copyFailed ? L"!" : L"") + L"\x02" + std::to_wstring(scale) +
+                       L"\x02" + std::to_wstring(g_settingsVersion);
+    for (auto const& row : card.rows) key += L"\x02" + row.label + L"\x03" + row.value;
+    if (key == layout.key) return layout;
+
+    layout = {key};
+    if (card.copyFailed) {
+        layout.copiedText = L"Couldn't copy: try again";
+    } else if (card.copied >= 0) {
+        layout.copiedText = card.copied == card.idRow ? L"ID copied" : L".exe copied";
+        if (card.idRow >= 0 && card.exeRow >= 0) {
+            layout.nextText = card.copied == card.idRow ? L"Ctrl+I: .exe" : L"Ctrl+I: ID";
+        }
+    }
+    float text = kCardTextSize * scale;
+    auto width = [&](std::wstring const& s) { return TextWidth(s, text); };
+    float valueWidth = 0;
+    for (auto const& row : card.rows) {
+        layout.labelWidth = std::max(layout.labelWidth, width(row.label));
+        valueWidth = std::max(valueWidth, width(row.value));
+    }
+    valueWidth = std::min(valueWidth, kCardValueMax * scale);
+    float gap = kCardLabelGap * scale;
+    bool footer = card.idRow >= 0 || card.exeRow >= 0;
+    float footerWidth =
+        footer ? 14 * scale + width(layout.copiedText) + gap + width(layout.nextText) : 0;
+    float content = std::max({TextWidth(card.title, kCardTitleSize * scale, true),
+                              layout.labelWidth + gap + valueWidth, footerWidth});
+    layout.w = (int)std::ceil(std::max(content + 2 * kCardPadX * scale, 2 * CardArrowRoom(scale)));
+    layout.h = std::round((2 * kCardPadY + kCardTitleHeight + card.rows.size() * kCardRowHeight +
+                           (footer ? kCardFooterHeight : 0)) *
+                          scale);
+    return layout;
+}
+
+// With its arrow's tip at `tip`, on screen, the card kept on the screen.
+void DrawInfoCard(POINT tip, float scale) {
+    namespace gp = Gdiplus;
+    InfoCard const& card = g_info;
+    CardLayout const& layout = LayOutInfoCard(scale);
+    int w = layout.w;
+    float h = layout.h;
+    int height = (int)h + (int)std::ceil(LabelArrow() * scale) + 1;
+    MONITORINFO monitor{.cbSize = sizeof(monitor)};
+    GetMonitorInfo(MonitorFromPoint(tip, MONITOR_DEFAULTTONEAREST), &monitor);
+    LONG edge = std::lround(kCardScreenEdge * scale);
+    LONG x = std::clamp<LONG>(tip.x - w / 2, monitor.rcMonitor.left + edge,
+                              std::max(monitor.rcMonitor.left + edge,
+                                       monitor.rcMonitor.right - edge - w));
+    float arrowRoom = (kLabelArrowHalf + kLabelArrowBase) * scale * LabelGrowth() +
+                      CardRadius(scale);
+    float arrowX = std::clamp((float)(tip.x - x), arrowRoom, std::max(arrowRoom, w - arrowRoom));
+    RECT rect{x, tip.y - height, x + w, tip.y};
+    // Where its arrow is changes what's drawn, as it nears the screen's edge.
+    std::wstring key = layout.key + L"\x04" + std::to_wstring(arrowX);
+
+    PaintLabel(rect, key, [&](gp::Graphics& g, std::vector<TextRun>& runs) {
+        float padX = kCardPadX * scale, rowHeight = kCardRowHeight * scale;
+        float titleHeight = kCardTitleHeight * scale, footerHeight = kCardFooterHeight * scale;
+        float title = kCardTitleSize * scale, text = kCardTextSize * scale;
+        gp::GraphicsPath shape;
+        BubbleShape(shape, (float)w, h, CardRadius(scale), arrowX, scale * LabelGrowth());
+        FillBubble(g, shape, w, height, LabelHeight() * scale);
+
+        Color ink = LabelInk(), dim = ink, mark = ink;
+        dim.A = kCardDimInk;
+        mark.A = kCardMarkInk;
+        gp::SolidBrush markBrush(GdiColor(mark));
+        auto add = [&](std::wstring const& s, float size, bool bold, gp::RectF box,
+                       TextAlign align, TextTrim trim, Color color) {
+            runs.push_back({s, size, bold, box.X, box.Y, box.Width, box.Height, align, trim,
+                            color});
+        };
+        float y = kCardPadY * scale, inner = w - 2 * padX;
+        add(card.title, title, true, gp::RectF(padX, y, inner, titleHeight), TextAlign::Left,
+            TextTrim::End, ink);
+        y += titleHeight;
+        for (int i = 0; i < (int)card.rows.size(); i++, y += rowHeight) {
+            auto const& row = card.rows[i];
+            if (i == card.copied) {
+                gp::GraphicsPath box;
+                RoundedBox(box, padX - 6 * scale, y + 1 * scale, inner + 12 * scale,
+                           rowHeight - 2 * scale, 5 * scale);
+                g.FillPath(&markBrush, &box);
+            }
+            add(row.label, text, false, gp::RectF(padX, y, layout.labelWidth + 1, rowHeight),
+                TextAlign::Left, TextTrim::End, dim);
+            float valueX = padX + layout.labelWidth + kCardLabelGap * scale;
+            add(row.value, text, false, gp::RectF(valueX, y, w - padX - valueX, rowHeight),
+                TextAlign::Left, TextTrim::Middle, row.note ? dim : ink);
+        }
+        if (card.idRow < 0 && card.exeRow < 0) return;
+        gp::Pen rule(GdiColor(mark), 1);
+        g.DrawLine(&rule, padX, y + 2 * scale, w - padX, y + 2 * scale);
+        float middle = y + 2 * scale + footerHeight / 2;
+        float textX = padX;
+        if (card.copied >= 0) {
+            gp::Pen tick(GdiColor(ink), 1.6f * scale);
+            tick.SetLineCap(gp::LineCapRound, gp::LineCapRound, gp::DashCapRound);
+            tick.SetLineJoin(gp::LineJoinRound);
+            gp::PointF points[] = {{padX + 1 * scale, middle},
+                                   {padX + 4 * scale, middle + 3 * scale},
+                                   {padX + 9.5f * scale, middle - 3.5f * scale}};
+            g.DrawLines(&tick, points, 3);
+            textX += 14 * scale;
+        }
+        gp::RectF line(textX, y + 2 * scale, w - padX - textX, footerHeight);
+        add(layout.copiedText, text, false, line, TextAlign::Left, TextTrim::End, ink);
+        add(layout.nextText, text, false, line, TextAlign::Right, TextTrim::End, dim);
+    });
+}
+
+// ---- Ctrl+I ----
+
+HANDLE g_infoKeysThread = nullptr;
+DWORD g_infoKeysThreadId = 0;
+// On the hook's thread: I's press was taken, so its repeats and release are too,
+// until a while after it's last seen, in case its release never comes.
+bool g_infoKeyTaken = false;
+DWORD g_infoKeyLast = 0;
+
+// The pointer's on an icon in the dock, as the last frame left it, and still in
+// the taskbar it was on, over one of Explorer's windows.
+bool PointerOnDockIcon() {
+    POINT cursor;
+    if (!g_overDockIcon || !GetCursorPos(&cursor)) return false;
+    {
+        std::lock_guard lock(g_overDockLock);
+        if (!PtInRect(&g_overDockRect, cursor)) return false;
+    }
+    HWND under = WindowFromPoint(cursor);
+    DWORD pid = 0;
+    return under && GetWindowThreadProcessId(under, &pid) && pid == GetCurrentProcessId();
+}
+
+bool KeyDown(int vk) { return GetAsyncKeyState(vk) & 0x8000; }
+
+LRESULT CALLBACK InfoKeyProc(int code, WPARAM wParam, LPARAM lParam) {
+    if (code == HC_ACTION && !g_unloading) {
+        auto const& key = *(KBDLLHOOKSTRUCT const*)lParam;
+        bool down = wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN;
+        if (key.vkCode == 'I') {
+            if (g_infoKeyTaken && key.time - g_infoKeyLast < 1500) {
+                g_infoKeyLast = key.time;
+                if (!down) g_infoKeyTaken = false;
+                return 1;
+            }
+            g_infoKeyTaken = false;
+            HWND w = g_modWindow;
+            if (down && w && KeyDown(VK_CONTROL) && !KeyDown(VK_SHIFT) && !KeyDown(VK_MENU) &&
+                !KeyDown(VK_LWIN) && !KeyDown(VK_RWIN) && PointerOnDockIcon()) {
+                PostMessage(w, kInfoKeyMessage, 0, 0);
+                g_infoKeyTaken = true;
+                g_infoKeyLast = key.time;
+                return 1;
+            }
+        } else if (key.vkCode == VK_ESCAPE && down && g_infoOpen) {
+            if (HWND w = g_modWindow) PostMessage(w, kInfoCloseMessage, 0, 0);
+        }
+    }
+    return CallNextHookEx(nullptr, code, wParam, lParam);
+}
+
+DWORD WINAPI InfoKeysThread(void* ready) {
+    MSG msg;
+    PeekMessage(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE);  // its queue, for WM_QUIT
+    HHOOK hook = SetWindowsHookEx(WH_KEYBOARD_LL, InfoKeyProc, ModuleInstance(), 0);
+    DWORD error = hook ? 0 : GetLastError();
+    SetEvent((HANDLE)ready);
+    if (!hook) Wh_Log(L"Ctrl+I can't be watched for (%u): no info cards", error);
+    while (GetMessage(&msg, nullptr, 0, 0) > 0) {
+    }
+    if (hook) UnhookWindowsHookEx(hook);
+    return 0;
+}
+
+// Once the taskbar's found: only the Explorer process that runs it listens.
+void StartInfoKeys() {
+    if (g_infoKeysThread || g_unloading) return;
+    HANDLE ready = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    if (!ready) return;
+    g_infoKeysThread = CreateThread(nullptr, 0, InfoKeysThread, ready, 0, &g_infoKeysThreadId);
+    if (g_infoKeysThread) WaitForSingleObject(ready, INFINITE);
+    CloseHandle(ready);
+}
+
+// Before unloading, as the thread runs the mod's code.
+void StopInfoKeys() {
+    if (!g_infoKeysThread) return;
+    PostThreadMessage(g_infoKeysThreadId, WM_QUIT, 0, 0);
+    WaitForSingleObject(g_infoKeysThread, INFINITE);
+    CloseHandle(g_infoKeysThread);
+    g_infoKeysThread = nullptr;
 }
 
 // The taskbar on `monitor`. Finding one enumerates every top-level window, too
@@ -5474,15 +7527,6 @@ float PanelToScreen(Plate& p, wf::Point point, POINT& out, RECT& window) {
     return scale;
 }
 
-// With its arrow's tip at (`x`, `tipY`) in the plate's panel.
-void ShowLabel(Plate& p, std::wstring const& name, float x, float tipY) {
-    POINT tip;
-    RECT window;
-    float scale = name.empty() ? 0 : PanelToScreen(p, {x, tipY}, tip, window);
-    if (scale <= 0 || !EnsureLabelWindow()) return HideLabel();
-    DrawLabel(name, tip, scale);
-}
-
 // Where the label's arrow tip goes over an icon `height` tall, as magnified
 // (icons grow from their bottom): never lower than the dock's top edge.
 float LabelTipY(Plate const& p, float height) {
@@ -5490,27 +7534,53 @@ float LabelTipY(Plate const& p, float height) {
     return std::min(bottom - height - kLabelGap, p.top - kLabelDockGap);
 }
 
-// Over the icon under the pointer.
+// Over the icon under the pointer: its name, or, after Ctrl+I, its info card.
 void UpdateLabel(Plate* p) {
-    if (!g_settings.tooltips || !p || !g_pointerOver || g_dragging || g_labelSuppressed ||
-        DockHidden()) {
+    RowItem const* hovered = nullptr;
+    float x = 0;
+    if (p && g_pointerOver && !g_dragging && !g_labelSuppressed && !DockHidden()) {
+        for (auto& item : g_row) {
+            float at = item.center + item.shift;
+            if (std::fabs(g_pointerX - at) > item.width * item.scale / 2) continue;
+            if (item.trash || item.element.get()) {
+                hovered = &item;
+                x = p->originX + at;
+            }
+            break;
+        }
+    }
+    auto el = hovered ? hovered->element.get() : nullptr;
+    bool trash = hovered && hovered->trash;
+    POINT tip;
+    RECT window;
+    float scale = 0;
+    if (hovered) {
+        float height = trash ? TrashArtHeight(p->trashState == 1) : g_size.icon;
+        scale = PanelToScreen(*p, {x, LabelTipY(*p, height * hovered->scale)}, tip, window);
+    }
+    if (scale <= 0) {
+        ClearOverDockIcon();
+        CloseInfoCard();
         return HideLabel();
     }
-    for (auto& item : g_row) {
-        float x = item.center + item.shift;
-        if (std::fabs(g_pointerX - x) > item.width * item.scale / 2) continue;
-        if (item.trash) {
-            PCWSTR name = HasTrashIcon() ? L"Trash" : L"Recycle Bin";
-            float tipY = LabelTipY(*p, TrashArtHeight(p->trashState == 1) * item.scale);
-            return ShowLabel(*p, name, p->originX + x, tipY);
-        }
-        auto el = item.element.get();
-        if (!el) break;
-        HideStockToolTip(el);
-        auto name = HasFinderIcon() && IsFileExplorer(el) ? L"Finder" : AppName(el);
-        return ShowLabel(*p, name, p->originX + x, LabelTipY(*p, g_size.icon * item.scale));
+    SetOverDockIcon(el, trash, window);
+
+    if (!InfoCardIsFor(el, trash)) CloseInfoCard();
+    if (g_info.open) {
+        if (el && g_settings.tooltips) HideStockToolTip(el);
+        if (EnsureLabelWindow()) DrawInfoCard(tip, scale);
+        return;
     }
-    HideLabel();
+    if (!g_settings.tooltips) return HideLabel();
+    std::wstring name;
+    if (trash) {
+        name = HasTrashIcon() ? L"Trash" : L"Recycle Bin";
+    } else {
+        HideStockToolTip(el);
+        name = HasFinderIcon() && IsFileExplorer(el) ? L"Finder" : AppName(el);
+    }
+    if (name.empty() || !EnsureLabelWindow()) return HideLabel();
+    DrawLabel(name, tip, scale);
 }
 
 // =============================================================================
@@ -5897,6 +7967,36 @@ bool ChangedNear(IDXGIOutputDuplication* duplication, RECT const& screen,
     return false;
 }
 
+// Around the pointer, on the desktop: on some PCs Windows draws the pointer
+// into the screen's pictures itself, and the glass would show it. Twice its
+// image's size about its hotspot, as Windows can draw it scaled, and padded
+// for its shadow. Empty if it's hidden. The image's size is kept per pointer,
+// on the capture's thread.
+RECT PointerRect() {
+    CURSORINFO info{.cbSize = sizeof(info)};
+    if (!GetCursorInfo(&info) || !(info.flags & CURSOR_SHOWING) || !info.hCursor) return {};
+    thread_local HCURSOR known = nullptr;
+    thread_local POINT hotspot{}, size{};
+    if (info.hCursor != known) {
+        ICONINFO icon{};
+        if (!GetIconInfo(info.hCursor, &icon)) return {};
+        BITMAP bitmap{};
+        bool color = icon.hbmColor && GetObject(icon.hbmColor, sizeof(bitmap), &bitmap);
+        if (!color && icon.hbmMask && GetObject(icon.hbmMask, sizeof(bitmap), &bitmap)) {
+            bitmap.bmHeight /= 2;  // the AND and XOR masks, one above the other
+        }
+        if (icon.hbmColor) DeleteObject(icon.hbmColor);
+        if (icon.hbmMask) DeleteObject(icon.hbmMask);
+        known = info.hCursor;
+        hotspot = {(LONG)icon.xHotspot, (LONG)icon.yHotspot};
+        size = {std::max(bitmap.bmWidth, 32L), std::max(bitmap.bmHeight, 32L)};
+    }
+    constexpr LONG kPad = 8;
+    POINT p = info.ptScreenPos;
+    return {p.x - 2 * hotspot.x - kPad, p.y - 2 * hotspot.y - kPad,
+            p.x + 2 * (size.x - hotspot.x) + kPad, p.y + 2 * (size.y - hotspot.y) + kPad};
+}
+
 // GlassTick soon, ahead of its timer, unless that's already been asked for.
 // From any thread.
 void RequestGlassTick() {
@@ -5912,10 +8012,16 @@ void RequestGlassTick() {
 // as it can be marked as the pointer's alone on a quiet screen), and has the
 // taskbar's thread draw the glass from it at once (kGlassFrameMessage), rather
 // than when a timer next comes round. Lets go of the screen when it ends.
+//
+// Where the pointer is, now or at the last copy (the picture is from between
+// the two), isn't copied after the first picture: the strip keeps what was
+// there before the pointer came, so the glass never shows the pointer.
 DWORD WINAPI CaptureThread(void* param) {
     auto& w = *(CaptureWorker*)param;
     bool first = true;
+    bool filled = false;  // the strip has a whole picture in it
     bool missed = false;  // a change not copied, the strip being busy
+    RECT pointerBefore{};
     std::vector<BYTE> buffer;
     try {
         while (!w.stop) {
@@ -5952,9 +8058,28 @@ DWORD WINAPI CaptureThread(void* param) {
                 break;
             }
             RECT const& s = w.stripRect;
-            D3D11_BOX box{(UINT)(s.left - w.screen.left), (UINT)(s.top - w.screen.top), 0,
-                          (UINT)(s.right - w.screen.left), (UINT)(s.bottom - w.screen.top), 1};
-            w.context->CopySubresourceRegion(w.strip.get(), 0, 0, 0, 0, texture.get(), 0, &box);
+            auto copy = [&](RECT r) {
+                if (r.right <= r.left || r.bottom <= r.top) return;
+                D3D11_BOX box{(UINT)(r.left - w.screen.left), (UINT)(r.top - w.screen.top), 0,
+                              (UINT)(r.right - w.screen.left), (UINT)(r.bottom - w.screen.top),
+                              1};
+                w.context->CopySubresourceRegion(w.strip.get(), 0, (UINT)(r.left - s.left),
+                                                 (UINT)(r.top - s.top), 0, texture.get(), 0,
+                                                 &box);
+            };
+            RECT pointerNow = PointerRect();
+            RECT pointer, hole;
+            UnionRect(&pointer, &pointerNow, &pointerBefore);
+            pointerBefore = pointerNow;
+            if (!filled || !IntersectRect(&hole, &pointer, &s)) {
+                copy(s);
+                filled = true;
+            } else {
+                copy({s.left, s.top, s.right, hole.top});
+                copy({s.left, hole.bottom, s.right, s.bottom});
+                copy({s.left, hole.top, hole.left, hole.bottom});
+                copy({hole.right, hole.top, s.right, hole.bottom});
+            }
             w.stripLock->ReleaseSync(0);
             w.copied++;
             if (g_glassWatching) RequestGlassTick();
@@ -7404,7 +9529,6 @@ void NoteTaskbarFrame(wux::FrameworkElement const& frame) {
 // what's on it is placed from where the tray's items are.
 
 constexpr float kTrayPlateRadius = 0.3f;    // of its height, as the dock's
-constexpr float kDefaultDockHeight = kDefaultIconSize + 2 * 12;  // at Size 60, for the glow
 
 // One of the tray's items (the ^ button and its icons, the system icons, the
 // clock), on the layer.
@@ -7568,11 +9692,10 @@ void PlaceTrayShadows(TrayDecor& t, std::vector<TrayItem> const& items, wf::Rect
 void ShapeTraySurface(TrayDecor& t) {
     float w = t.surfaceRect.Width, h = t.surfaceRect.Height;
     if (!t.surface.root || w <= 0 || h <= 0) return;
-    // Matching the dock, its glow is as deep as the dock's; otherwise it's in
-    // proportion to its own height.
-    float glow = g_settings.trayMatchDock ? g_settings.glowSize * g_size.icon / kDefaultIconSize
-                                          : g_settings.glowSize * h / kDefaultDockHeight;
-    ShapeSurface(t.surface, TrayLook(), w, h, h * kTrayPlateRadius, glow);
+    // Matching the dock, its glows are as deep as the dock's; otherwise they're
+    // in proportion to its own height.
+    float reference = g_settings.trayMatchDock ? g_size.dockHeight : h;
+    ShapeSurface(t.surface, TrayLook(), w, h, h * kTrayPlateRadius, reference);
 }
 
 // Around the tray's items, inset from its row's top and bottom. Placed again
@@ -7642,6 +9765,118 @@ void ApplyTrayLooks() {
     for (auto& t : *g_trayDecor) Try([&] { ApplyTrayLook(t); }, L"Tray background");
 }
 
+// ---- Opening the tray's menus ----
+// Quick Settings' and the clock's buttons (OmniButtons) open their menus only
+// when one of their icons is clicked: the few pixels Windows leaves between and
+// around the icons light up as the pointer passes, but a click there does
+// nothing. So each of those icons gets a clear area of the mod's behind it,
+// which catches clicks across the gaps: to its button's edges, up over the
+// tray's background, and down to the screen's edge, and for the clock, right
+// to the screen's edge. Icons in one button open the same menu, so where the
+// areas overlap doesn't matter. Nothing moves: the areas take no room.
+
+constexpr wchar_t kTrayHitAreaName[] = L"MacStyleDockHitArea";
+
+struct TrayHitArea {
+    winrt::weak_ref<wuxc::Panel> panel;  // the icon's own grid
+    wuxc::Border area{nullptr};
+};
+[[clang::no_destroy]] std::optional<std::list<TrayHitArea>> g_trayHitAreas{std::in_place};
+
+bool IsOmniButton(wux::DependencyObject const& el) {
+    return el && winrt::get_class_name(el) == L"SystemTray.OmniButton";
+}
+
+bool SameThickness(wux::Thickness a, wux::Thickness b) {
+    return std::abs(a.Left - b.Left) < 0.5 && std::abs(a.Top - b.Top) < 0.5 &&
+           std::abs(a.Right - b.Right) < 0.5 && std::abs(a.Bottom - b.Bottom) < 0.5;
+}
+
+// The icon's area, reaching `reach` past it on each side.
+void EnsureTrayHitArea(wux::FrameworkElement const& icon, wux::Thickness reach) {
+    if (wuxm::VisualTreeHelper::GetChildrenCount(icon) < 1) return;
+    auto grid = wuxm::VisualTreeHelper::GetChild(icon, 0).try_as<wuxc::Grid>();
+    if (!grid) return;
+    wux::Thickness margin{-reach.Left, -reach.Top, -reach.Right, -reach.Bottom};
+    for (auto const& child : grid.Children()) {
+        auto el = child.try_as<wuxc::Border>();
+        if (!el || el.Name() != kTrayHitAreaName) continue;
+        if (!SameThickness(el.Margin(), margin)) el.Margin(margin);
+        return;
+    }
+    wuxc::Border area;
+    area.Name(kTrayHitAreaName);
+    area.Background(wuxm::SolidColorBrush(Color{0, 0, 0, 0}));  // clear, but catches clicks
+    area.Margin(margin);
+    wuxc::Grid::SetRowSpan(area, 100);
+    wuxc::Grid::SetColumnSpan(area, 100);
+    grid.Children().InsertAt(0, area);  // behind the icon
+    g_trayHitAreas->remove_if([](TrayHitArea const& h) { return !h.panel.get(); });
+    g_trayHitAreas->push_back({winrt::make_weak<wuxc::Panel>(grid), area});
+}
+
+// For the icons in the menus' buttons in the tray's row of items, `row`,
+// whose frame is `frame`. Kept up as the tray's laid out again.
+void EnsureTrayHitAreas(wux::FrameworkElement const& row, wux::FrameworkElement const& frame) {
+    if (!g_trayHitAreas || g_unloading) return;
+    std::vector<wux::FrameworkElement> buttons;
+    ForEachDescendant(row, 1, [&](wux::FrameworkElement const& el) {
+        if (IsOmniButton(el) && el.Visibility() == Visibility::Visible) buttons.push_back(el);
+        return false;
+    });
+    if (buttons.empty()) return;
+    auto rectOf = [&](wux::FrameworkElement const& el) {
+        return el.TransformToVisual(frame).TransformBounds(
+            {0, 0, (float)el.ActualWidth(), (float)el.ActualHeight()});
+    };
+    // The rightmost button's last icon reaches the screen's right edge.
+    float rightmost = 0;
+    for (auto const& b : buttons) {
+        auto r = rectOf(b);
+        rightmost = std::max(rightmost, r.X + r.Width);
+    }
+    float plateTop = rectOf(row).Y - TrayPlateAbove();
+    float bottom = (float)frame.ActualHeight();
+    for (auto const& button : buttons) {
+        auto b = rectOf(button);
+        std::vector<std::pair<wux::FrameworkElement, wf::Rect>> icons;
+        ForEachDescendant(button, 8, [&](wux::FrameworkElement const& el) {
+            if (winrt::get_class_name(el) != L"SystemTray.IconView") return true;
+            if (el.Visibility() == Visibility::Visible && el.ActualWidth() > 0) {
+                icons.push_back({el, rectOf(el)});
+            }
+            return false;
+        });
+        std::sort(icons.begin(), icons.end(),
+                  [](auto const& a, auto const& c) { return a.second.X < c.second.X; });
+        for (size_t i = 0; i < icons.size(); i++) {
+            auto const& r = icons[i].second;
+            float left = i ? icons[i - 1].second.X + icons[i - 1].second.Width : b.X;
+            float right = i + 1 < icons.size() ? icons[i + 1].second.X : b.X + b.Width;
+            if (i + 1 == icons.size() && b.X + b.Width >= rightmost - 0.5f) {
+                right = (float)frame.ActualWidth();
+            }
+            wux::Thickness reach{std::max(0.0f, r.X - left), std::max(0.0f, r.Y - plateTop),
+                                 std::max(0.0f, right - (r.X + r.Width)),
+                                 std::max(0.0f, bottom - (r.Y + r.Height))};
+            EnsureTrayHitArea(icons[i].first, reach);
+        }
+    }
+}
+
+// Before unloading.
+void RemoveTrayHitAreas() {
+    if (!g_trayHitAreas) return;
+    for (auto const& h : *g_trayHitAreas) {
+        auto panel = h.panel.get();
+        uint32_t index;
+        if (panel && h.area) Try([&] {
+            if (panel.Children().IndexOf(h.area, index)) panel.Children().RemoveAt(index);
+        });
+    }
+    g_trayHitAreas->clear();
+}
+
 // ---- Adding and removing ----
 
 void AddTrayDecor(wux::FrameworkElement const& row) {
@@ -7681,10 +9916,14 @@ void AddTrayDecor(wux::FrameworkElement const& row) {
                 auto grid = t.grid.get();
                 if (t.layer == weak.get() && grid) {
                     Try([&] { PlaceTraySurface(t, grid); }, L"Tray layer");
+                    auto frame = t.frame.get();
+                    auto row = grid.try_as<wux::FrameworkElement>();
+                    if (frame && row) {
+                        Try([&] { EnsureTrayHitAreas(row, frame); }, L"Tray hit areas");
+                    }
                 }
             }
         });
-    Wh_Log(L"Tray background added (in a %s)", winrt::get_class_name(grid).c_str());
 }
 
 // Everything added to the trays taken out. `final` once unloading; otherwise
@@ -7716,10 +9955,11 @@ void ScanTray(wux::FrameworkElement const& frame) {
         if (type == L"Taskbar.TaskbarFrame") return false;
         if (type != L"SystemTray.SystemTrayFrame") return true;
         FixTrayFrame(el);
-        ForEachDescendant(el, 1, [](wux::FrameworkElement const& child) {
+        ForEachDescendant(el, 1, [&el](wux::FrameworkElement const& child) {
             if (child.Name() == L"SystemTrayFrameGrid") {
                 FixTrayRow(child);
                 Try([&] { AddTrayDecor(child); }, L"Tray background");
+                Try([&] { EnsureTrayHitAreas(child, el); }, L"Tray hit areas");
             }
             return false;
         });
@@ -7750,6 +9990,7 @@ void ScanTaskbars() {
         });
         ScanTray(frame);
     }
+    if (!g_frames.empty()) StartInfoKeys();
 }
 
 // =============================================================================
@@ -8109,6 +10350,8 @@ void ResetAll() {
     WatchWindows(false);
     WatchWindowDrops(false);
     WatchTaskView(false);
+    ClearOverDockIcon();
+    CloseInfoCard();
     Try(DestroyLabel);
     Try(RemovePlates);
     g_d2d = nullptr;
@@ -8130,6 +10373,8 @@ void ResetAll() {
         }
     }
     Try([] { RemoveTrayDecor(true); });
+    Try(RemoveTrayHitAreas);
+    g_trayHitAreas.reset();
     Try(RemoveStartIcons);
     Try(ReleaseStillIcons);
     Try(UndimDragged);
@@ -8141,7 +10386,9 @@ void ResetAll() {
     if (HWND w = g_modWindow.exchange(nullptr)) DestroyWindow(w);
 
     g_finderIconSource.reset();
+    g_appIconSources.clear();
     CancelSquircleRenders();
+    for (auto& s : g_iconSwaps) ShowIconAgain(s);
     g_iconSwaps.clear();
     g_squircleCache.clear();
     ShutdownGdiplus();
@@ -9046,7 +11293,7 @@ POINT PreviewOffset(RECT const* rect) {
 
     float iconTop = p->top + g_size.padY + g_size.icon * (1 - g_settings.scale);
     float top = g_settings.tooltips
-                    ? LabelTipY(*p, g_size.icon * g_settings.scale) - kLabelArrow - kLabelHeight
+                    ? LabelTipY(*p, g_size.icon * g_settings.scale) - LabelArrow() - LabelHeight()
                     : std::min(iconTop, p->top);
     float shift = 0;
     wux::FrameworkElement button{nullptr};
@@ -9666,6 +11913,15 @@ LRESULT CALLBACK ModWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
         case kGlassFreezeMessage:
             if (!g_unloading) Try(ToggleGlassFrozen, L"Liquid Glass freeze");
             return 0;
+        case kInfoKeyMessage:
+            if (!g_unloading) Try(OnInfoKey, L"Info card");
+            return 0;
+        case kInfoCloseMessage:
+            if (!g_unloading && g_info.open) {
+                CloseInfoCard();
+                StartFrames();  // the name label, back
+            }
+            return 0;
         case kGlassFrameMessage:
             g_glassFramePosted = false;  // the next picture asks again
             if (!g_unloading && g_glassActive) Try(GlassTick, L"Liquid Glass");
@@ -9949,11 +12205,1202 @@ HMODULE WINAPI LoadLibraryExW_Hook(LPCWSTR name, HANDLE file, DWORD flags) {
 }
 
 // =============================================================================
+// START AND TRAY MENUS
+// =============================================================================
+// Start opens in the middle of the screen, fading in as it grows, and the
+// tray's menus (Quick Settings and the Notification Center) at the middle of
+// its right edge, sliding in from there. None of them has a drop shadow. Each
+// is shown by another process, which the mod also loads into, doing only this
+// there:
+//
+// - Start (StartMenuExperienceHost.exe): the menu's frame is centered. Start
+//   is told Windows' animations are off, and its frame's composition visual is
+//   animated instead. The redesigned Start menu is told the taskbar is at the
+//   bottom, whatever it reads. Search, which typing into Start opens, is moved
+//   by Explorer to Start's spot, and, in SearchHost.exe, told Windows'
+//   animations are off too.
+// - Quick Settings (ShellHost.exe, or ShellExperienceHost.exe before 24H2):
+//   its window is subclassed, and placed whenever it's moved.
+// - None of them has a drop shadow: Start's shadow borders are collapsed, and
+//   the tray menus' panels cast none.
+// - The Notification Center (ShellExperienceHost.exe) is placed by Explorer,
+//   which gives it a region (its visible part) and shows it. It's moved then.
+// - Windows that can move the taskbar (26H2) slide the tray's menus in from
+//   the side it reads the taskbar is on, so they're told it's on the right.
+//
+// After m417z's "Shell Flyout Positions" and "Vertical Taskbar for Windows 11",
+// and Asteski's "Notification Center Follows Taskbar".
+
+namespace Menus {
+
+enum class Host { Explorer, Start, Search, ShellExperience, Shell };
+Host g_host = Host::Explorer;
+
+// The settings: whether the mod takes over Start, and the tray's menus. When
+// it doesn't, it stays out of their processes, for Windows or another mod.
+std::atomic<bool> g_controlStart = true;
+std::atomic<bool> g_controlTray = true;
+
+void LoadMenuSettings() {
+    g_controlStart = Wh_GetIntSetting(L"menus.controlStart") != 0;
+    g_controlTray = Wh_GetIntSetting(L"menus.controlTray") != 0;
+}
+
+// Start fades in as it grows from this much of its size.
+constexpr float kStartAppearScale = 0.75f;
+constexpr auto kStartAppearTime = std::chrono::milliseconds(100);
+// The longest Start's animation waits for its window to be uncloaked.
+constexpr auto kStartUncloakWait = std::chrono::milliseconds(400);
+
+// What's animated: Start's frame.
+[[clang::no_destroy]] winrt::weak_ref<wux::FrameworkElement> g_startFrame;
+
+std::wstring ProcessName(DWORD pid) {
+    std::wstring name;
+    if (HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) {
+        WCHAR path[MAX_PATH];
+        DWORD size = ARRAYSIZE(path);
+        if (QueryFullProcessImageNameW(process, 0, path, &size)) {
+            PCWSTR file = wcsrchr(path, L'\\');
+            name = file ? file + 1 : path;
+        }
+        CloseHandle(process);
+    }
+    return name;
+}
+
+std::wstring ThreadName(DWORD tid) {
+    std::wstring name;
+    if (HANDLE thread = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, tid)) {
+        PWSTR description = nullptr;
+        if (SUCCEEDED(GetThreadDescription(thread, &description)) && description) {
+            name = description;
+        }
+        if (description) LocalFree(description);
+        CloseHandle(thread);
+    }
+    return name;
+}
+
+bool HasClass(HWND w, PCWSTR name) {
+    WCHAR cls[64];
+    return GetClassNameW(w, cls, ARRAYSIZE(cls)) && !_wcsicmp(cls, name);
+}
+
+// Where a window's top goes to center the part of it that shows, from `top`
+// to `bottom` in the window, on the screen, keeping that part on the screen.
+LONG ScreenMiddleTop(HMONITOR monitor, LONG top, LONG bottom) {
+    MONITORINFO info{.cbSize = sizeof(info)};
+    GetMonitorInfo(monitor, &info);
+    RECT const& m = info.rcMonitor;
+    LONG y = ((m.top + m.bottom) - (top + bottom)) / 2;
+    return std::clamp(y, m.top - top, std::max(m.top - top, m.bottom - bottom));
+}
+
+template <typename F>
+F SystemFunction(PCWSTR dll, PCSTR name) {
+    HMODULE module = GetModuleHandleW(dll);
+    return module ? (F)GetProcAddress(module, name) : nullptr;
+}
+
+// --- Drop shadows, in Start's and the tray menus' processes -----------------
+
+// Start draws its shadow with borders named for it, and the tray's menus cast
+// theirs from their panels. Lists, in scroll viewers, keep their items' own,
+// so notifications keep theirs.
+bool IsShadowBorder(wux::FrameworkElement const& el) {
+    if (!el.try_as<wuxc::Border>()) return false;
+    std::wstring name(el.Name());
+    std::ranges::transform(name, name.begin(), [](wchar_t c) { return (wchar_t)towlower(c); });
+    return name.find(L"dropshadow") != std::wstring::npos;
+}
+
+void Collapse(wux::FrameworkElement const& el) {
+    if (el.Visibility() != Visibility::Collapsed) el.Visibility(Visibility::Collapsed);
+}
+
+void Unshadow(wux::FrameworkElement const& el) {
+    if (el.Shadow()) el.Shadow(nullptr);
+}
+
+// Kept off, as the menu would put them back. Returns how many there are,
+// including ones already taken off.
+int StripShadows(wux::DependencyObject const& el, int depth = 0) {
+    if (!el || depth > 40) return 0;
+    int found = 0;
+    if (auto fe = el.try_as<wux::FrameworkElement>()) {
+        if (depth > 0 && fe.try_as<wuxc::ScrollViewer>()) return 0;
+        if (IsShadowBorder(fe)) {
+            Track(fe, wux::UIElement::VisibilityProperty(), Collapse);
+            Collapse(fe);
+            found++;
+        }
+        if (fe.Shadow() || FindOverride(fe, wux::UIElement::ShadowProperty())) {
+            Track(fe, wux::UIElement::ShadowProperty(), Unshadow);
+            Unshadow(fe);
+            found++;
+        }
+    }
+    int count = wuxm::VisualTreeHelper::GetChildrenCount(el);
+    for (int i = 0; i < count; i++) {
+        found += StripShadows(wuxm::VisualTreeHelper::GetChild(el, i), depth + 1);
+    }
+    return found;
+}
+
+// --- Start, in StartMenuExperienceHost.exe ----------------------------------
+
+// Start's window: this process's CoreWindow. Start is placed, and its shadow
+// taken off, each time it's shown.
+HWND StartWindow() {
+    HWND found = nullptr;
+    EnumWindows(
+        [](HWND w, LPARAM param) -> BOOL {
+            DWORD pid = 0;
+            if (!GetWindowThreadProcessId(w, &pid) || pid != GetCurrentProcessId() ||
+                !HasClass(w, L"Windows.UI.Core.CoreWindow")) {
+                return TRUE;
+            }
+            *(HWND*)param = w;
+            return FALSE;
+        },
+        (LPARAM)&found);
+    return found;
+}
+
+wux::FrameworkElement ChildWhere(wux::DependencyObject const& parent,
+                                 std::function<bool(wux::FrameworkElement const&)> const& match) {
+    int count = wuxm::VisualTreeHelper::GetChildrenCount(parent);
+    for (int i = 0; i < count; i++) {
+        auto child = wuxm::VisualTreeHelper::GetChild(parent, i).try_as<wux::FrameworkElement>();
+        if (child && match(child)) return child;
+    }
+    return nullptr;
+}
+
+// The screen's center, in view pixels from the top left of Start's window,
+// which can stop short of the screen (above the dock, say).
+std::optional<wf::Point> ScreenCenterInStart() {
+    HWND w = StartWindow();
+    RECT window;
+    if (!w || !GetWindowRect(w, &window)) return std::nullopt;
+    MONITORINFO monitor{.cbSize = sizeof(monitor)};
+    if (!GetMonitorInfo(MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST), &monitor)) {
+        return std::nullopt;
+    }
+    double scale = GetDpiForWindow(w) / 96.0;
+    if (scale <= 0) return std::nullopt;
+    RECT const& m = monitor.rcMonitor;
+    return wf::Point{(float)(((m.left + m.right) / 2.0 - window.left) / scale),
+                     (float)(((m.top + m.bottom) / 2.0 - window.top) / scale)};
+}
+
+// The redesigned Start menu: a frame centered in Start's window, its margins
+// kept as Windows sets them, the top and bottom ones evened out. It's moved
+// onto the screen's center if the window's isn't (as when the dock takes room
+// at the bottom), by a translation.
+void PlaceRedesignedStart(wux::FrameworkElement const& content) {
+    auto frame = ChildWhere(content, [](auto const& el) { return el.Name() == L"FrameRoot"; });
+    if (!frame) {
+        Wh_Log(L"Start's frame isn't there");
+        return;
+    }
+    Reapply horizontal = [](wux::FrameworkElement const& el) {
+        if (el.HorizontalAlignment() != wux::HorizontalAlignment::Center) {
+            el.HorizontalAlignment(wux::HorizontalAlignment::Center);
+        }
+    };
+    Reapply vertical = [](wux::FrameworkElement const& el) {
+        if (el.VerticalAlignment() != wux::VerticalAlignment::Center) {
+            el.VerticalAlignment(wux::VerticalAlignment::Center);
+        }
+    };
+    Reapply margin = [](wux::FrameworkElement const& el) {
+        wux::Thickness m = el.Margin();
+        double half = (m.Top + m.Bottom) / 2;
+        if (m.Top != half || m.Bottom != half) el.Margin({m.Left, half, m.Right, half});
+    };
+    Track(frame, wux::FrameworkElement::HorizontalAlignmentProperty(), horizontal);
+    Track(frame, wux::FrameworkElement::VerticalAlignmentProperty(), vertical);
+    Track(frame, wux::FrameworkElement::MarginProperty(), margin);
+    horizontal(frame);
+    vertical(frame);
+    margin(frame);
+
+    // How far the screen's center is from the window's.
+    wf::Point shift{};
+    auto middle = ScreenCenterInStart();
+    if (middle && content.ActualWidth() > 0 && content.ActualHeight() > 0) {
+        shift = {(float)(middle->X - content.ActualWidth() / 2),
+                 (float)(middle->Y - content.ActualHeight() / 2)};
+    }
+    Reapply translate = [shift](wux::FrameworkElement const& el) {
+        auto current = el.RenderTransform().try_as<wuxm::TranslateTransform>();
+        if (current && current.X() == shift.X && current.Y() == shift.Y) return;
+        wuxm::TranslateTransform transform;
+        transform.X(shift.X);
+        transform.Y(shift.Y);
+        el.RenderTransform(transform);
+    };
+    if (shift.X || shift.Y || FindOverride(frame, wux::UIElement::RenderTransformProperty())) {
+        // Kept to the new shift.
+        Release(frame, wux::UIElement::RenderTransformProperty());
+        Track(frame, wux::UIElement::RenderTransformProperty(), translate);
+        translate(frame);
+    }
+    g_startFrame = winrt::make_weak(frame);
+}
+
+// The classic Start menu's frame is on a canvas the size of Start's window,
+// and resizable: it's placed again as it's resized.
+struct SizeWatch {
+    winrt::weak_ref<wux::FrameworkElement> element;
+    winrt::event_token token;
+};
+[[clang::no_destroy]] SizeWatch g_classicStartSize;
+
+void StopWatchingSize() {
+    if (auto el = g_classicStartSize.element.get()) {
+        Try([&] { el.SizeChanged(g_classicStartSize.token); });
+    }
+    g_classicStartSize = {};
+}
+
+// Canvas.Left and Canvas.Top: at the screen's center, kept on the canvas.
+void PlaceClassicStartX(wux::FrameworkElement const& frame) {
+    auto canvas = wuxm::VisualTreeHelper::GetParent(frame).try_as<wux::FrameworkElement>();
+    auto middle = ScreenCenterInStart();
+    if (!canvas || !middle || canvas.ActualWidth() <= 0) return;
+    double left = std::clamp(middle->X - frame.ActualWidth() / 2, 0.0,
+                             std::max(0.0, canvas.ActualWidth() - frame.ActualWidth()));
+    if (wuxc::Canvas::GetLeft(frame) != left) wuxc::Canvas::SetLeft(frame, left);
+}
+
+void PlaceClassicStartY(wux::FrameworkElement const& frame) {
+    auto canvas = wuxm::VisualTreeHelper::GetParent(frame).try_as<wux::FrameworkElement>();
+    if (!canvas || canvas.ActualHeight() <= 0) return;
+    auto center = ScreenCenterInStart();
+    double middle = center ? center->Y : canvas.ActualHeight() / 2;
+    double top = std::clamp(middle - frame.ActualHeight() / 2, 0.0,
+                            std::max(0.0, canvas.ActualHeight() - frame.ActualHeight()));
+    if (wuxc::Canvas::GetTop(frame) != top) wuxc::Canvas::SetTop(frame, top);
+}
+
+void PlaceClassicStart(wux::FrameworkElement const& canvas) {
+    auto frame = ChildWhere(canvas, [](auto const& el) {
+        return winrt::get_class_name(el) == L"StartDocked.StartSizingFrame";
+    });
+    if (!frame) {
+        Wh_Log(L"Start's frame isn't there");
+        return;
+    }
+    Track(frame, wuxc::Canvas::LeftProperty(), PlaceClassicStartX);
+    Track(frame, wuxc::Canvas::TopProperty(), PlaceClassicStartY);
+    PlaceClassicStartX(frame);
+    PlaceClassicStartY(frame);
+    g_startFrame = winrt::make_weak(frame);
+    if (g_classicStartSize.element.get() != frame) {
+        StopWatchingSize();
+        g_classicStartSize.element = winrt::make_weak(frame);
+        g_classicStartSize.token =
+            frame.SizeChanged([](wf::IInspectable const& sender, wux::SizeChangedEventArgs const&) {
+                Try([&] {
+                    if (auto el = sender.try_as<wux::FrameworkElement>()) {
+                        PlaceClassicStartX(el);
+                        PlaceClassicStartY(el);
+                    }
+                });
+            });
+    }
+}
+
+void PlaceStart() {
+    auto window = wux::Window::Current();
+    auto content = window ? window.Content().try_as<wux::FrameworkElement>() : nullptr;
+    if (!content) return;
+    g_overrides->remove_if([](Override const& o) { return !o.element.get(); });
+    StripShadows(content);
+    auto type = winrt::get_class_name(content);
+    if (type == L"StartMenu.StartBlendedFlexFrame") {
+        PlaceRedesignedStart(content);
+    } else if (type == L"Windows.UI.Xaml.Controls.Canvas") {
+        PlaceClassicStart(content);
+    } else {
+        Wh_Log(L"Start's layout isn't one the mod knows: %s", type.c_str());
+    }
+}
+
+// Start fades in as it grows to its size, by its frame's composition visual,
+// Windows' own animations in it being off (see SystemParametersInfoW_Hook).
+// Windows keeps Start's window cloaked for a few frames after it's shown, so
+// the animation waits until it's uncloaked, to be seen from its start: Start is
+// held see-through and small until then (HoldStart), for up to
+// kStartUncloakWait. It's also
+// made see-through and small as it closes, once it's been seen opening (which
+// is when it's shown again), so no frame of it shows before that.
+bool g_startSeenOpening = false;
+HWND g_startHwnd = nullptr;
+bool g_startHeld = false;  // the frame's opacity kept at 0 (KeepStartHidden)
+[[clang::no_destroy]] wux::DispatcherTimer g_startUncloakTimer{nullptr};
+[[clang::no_destroy]] wuxm::Animation::Storyboard g_startFade{nullptr};
+std::chrono::steady_clock::time_point g_startShownAt;
+
+// How long since Start was shown, and whether its window is still cloaked.
+double SinceShown() {
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                     g_startShownAt)
+        .count();
+}
+
+DWORD StartCloakedValue() {
+    DWORD cloaked = 0;
+    if (g_startHwnd) DwmGetWindowAttribute(g_startHwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked));
+    return cloaked;
+}
+
+// While Start's held, its frame's opacity is kept at 0, set straight back
+// whenever Windows sets it, which it does as Start opens.
+void KeepStartHidden(wux::FrameworkElement const& el) {
+    if (g_startHeld && el.Opacity() != 0) el.Opacity(0);
+}
+
+// Held see-through and small. The opacity is the frame's own, the one Windows
+// sets: setting it on the frame's composition visual, or holding it there with
+// an animation, doesn't last, as Windows setting it overrides that.
+void HoldStart() {
+    auto frame = g_startFrame.get();
+    if (!frame || g_unloading) return;
+    if (g_startFade) g_startFade.Stop();
+    g_startHeld = true;
+    Track(frame, wux::UIElement::OpacityProperty(), KeepStartHidden);
+    if (frame.Opacity() != 0) frame.Opacity(0);
+    auto visual = wuxh::ElementCompositionPreview::GetElementVisual(frame);
+    visual.StopAnimation(L"Opacity");
+    visual.StopAnimation(L"Scale");
+    visual.Opacity(1);
+    visual.CenterPoint({(float)frame.ActualWidth() / 2, (float)frame.ActualHeight() / 2, 0});
+    visual.Scale({kStartAppearScale, kStartAppearScale, 1});
+}
+
+void ReadyStartToAppear() {
+    if (g_startSeenOpening) HoldStart();
+}
+
+// The fade, of the frame's own opacity, is even throughout and runs over
+// Windows' value, which is back once it ends. The growth, of its composition
+// visual, is quick, then gentle.
+void AppearStart() {
+    auto frame = g_startFrame.get();
+    if (!frame || g_unloading) return;
+    g_startHeld = false;
+    frame.Opacity(1);
+    if (!g_startFade) {
+        wuxm::Animation::DoubleAnimation fade;
+        fade.From(0.0);
+        fade.To(1.0);
+        fade.Duration(wux::DurationHelper::FromTimeSpan(kStartAppearTime));
+        g_startFade = wuxm::Animation::Storyboard();
+        g_startFade.FillBehavior(wuxm::Animation::FillBehavior::Stop);
+        g_startFade.Children().Append(fade);
+        wuxm::Animation::Storyboard::SetTargetProperty(fade, L"Opacity");
+    }
+    g_startFade.Stop();
+    wuxm::Animation::Storyboard::SetTarget(g_startFade.Children().GetAt(0), frame);
+    g_startFade.Begin();
+
+    auto visual = wuxh::ElementCompositionPreview::GetElementVisual(frame);
+    auto compositor = visual.Compositor();
+    visual.CenterPoint({(float)frame.ActualWidth() / 2, (float)frame.ActualHeight() / 2, 0});
+    visual.Scale({1, 1, 1});
+    auto grow = compositor.CreateVector3KeyFrameAnimation();
+    grow.InsertKeyFrame(0, {kStartAppearScale, kStartAppearScale, 1});
+    grow.InsertKeyFrame(1, {1, 1, 1},
+                        compositor.CreateCubicBezierEasingFunction({0.1f, 0.9f}, {0.2f, 1.0f}));
+    grow.Duration(kStartAppearTime);
+    visual.StartAnimation(L"Scale", grow);
+}
+
+void StopWaitingToAppear() {
+    if (g_startUncloakTimer) Try([] { g_startUncloakTimer.Stop(); });
+}
+
+void AppearStartOnceUncloaked() {
+    g_startShownAt = std::chrono::steady_clock::now();
+    HoldStart();
+    if (!g_startUncloakTimer) {
+        g_startUncloakTimer = wux::DispatcherTimer();
+        g_startUncloakTimer.Interval(std::chrono::milliseconds(5));
+        g_startUncloakTimer.Tick([](wf::IInspectable const&, wf::IInspectable const&) {
+            Try([] {
+                DWORD cloaked = StartCloakedValue();
+                if (cloaked && SinceShown() < kStartUncloakWait.count()) return;
+                StopWaitingToAppear();
+                AppearStart();
+            }, L"Start's animation");
+        });
+    }
+    g_startUncloakTimer.Stop();
+    g_startUncloakTimer.Start();
+}
+
+// Fully shown, as it would be without the mod.
+void ResetStartVisual() {
+    StopWaitingToAppear();
+    g_startUncloakTimer = nullptr;
+    g_startHeld = false;
+    if (g_startFade) g_startFade.Stop();
+    g_startFade = nullptr;
+    auto frame = std::exchange(g_startFrame, nullptr).get();
+    if (!frame) return;
+    auto visual = wuxh::ElementCompositionPreview::GetElementVisual(frame);
+    visual.StopAnimation(L"Opacity");
+    visual.StopAnimation(L"Scale");
+    visual.Opacity(1);
+    visual.Scale({1, 1, 1});
+    visual.CenterPoint({0, 0, 0});
+}
+
+winrt::event_token g_startShown;
+
+// On Start's thread. Start is placed each time it's shown, and whenever
+// Windows changes what was set.
+void InitStart() {
+    if (g_startShown || g_unloading) return;
+    auto window = wux::Window::Current();
+    if (!window) return;
+    g_startHwnd = StartWindow();
+    using winrt::Windows::UI::Core::VisibilityChangedEventArgs;
+    g_startShown = window.VisibilityChanged(
+        [](wf::IInspectable const&, VisibilityChangedEventArgs const& args) {
+            if (args.Visible()) {
+                g_startSeenOpening = true;
+                Try(PlaceStart, L"Placing Start");
+                Try(AppearStartOnceUncloaked, L"Start's animation");
+            } else {
+                Try(StopWaitingToAppear);
+                Try(ReadyStartToAppear, L"Start's animation");
+            }
+        });
+    Try(PlaceStart, L"Placing Start");
+}
+
+void UninitStart() {
+    if (auto window = wux::Window::Current(); window && g_startShown) {
+        window.VisibilityChanged(g_startShown);
+    }
+    g_startShown = {};
+    StopWatchingSize();
+    Try(ResetStartVisual, L"Start's animation");
+    RestoreOverrides();
+}
+
+// Start, and search (SearchHost.exe), which typing into Start opens, are told
+// Windows' animations are off, so they neither slide in nor out. They read
+// this as they start, and again as they're told the setting changed.
+using SystemParametersInfoW_t = decltype(&SystemParametersInfoW);
+SystemParametersInfoW_t SystemParametersInfoW_Original;
+BOOL WINAPI SystemParametersInfoW_Hook(UINT action, UINT param, PVOID value, UINT flags) {
+    BOOL result = SystemParametersInfoW_Original(action, param, value, flags);
+    if (result && action == SPI_GETCLIENTAREAANIMATION && value && !g_unloading) {
+        *(BOOL*)value = FALSE;
+    }
+    return result;
+}
+
+// Has this process's windows read the animation setting again.
+void TellAnimationsChanged() {
+    EnumWindows(
+        [](HWND w, LPARAM) -> BOOL {
+            DWORD pid = 0;
+            if (GetWindowThreadProcessId(w, &pid) && pid == GetCurrentProcessId() &&
+                HasClass(w, L"Windows.UI.Core.CoreWindow")) {
+                PostMessage(w, WM_SETTINGCHANGE, SPI_SETCLIENTAREAANIMATION, 0);
+            }
+            return TRUE;
+        },
+        0);
+}
+
+// The redesigned Start menu (StartMenu.dll) gets the taskbar's edge here, which
+// its animations, and how it fits in its window, are for. It's always the
+// bottom, where the dock is.
+enum class TaskbarEdge { Left, Top, Right, Bottom };
+using GetCurrentTaskbarEdge_t = TaskbarEdge(WINAPI*)(void* pThis, TaskbarEdge edge);
+GetCurrentTaskbarEdge_t GetCurrentTaskbarEdge_Original;
+TaskbarEdge WINAPI GetCurrentTaskbarEdge_Hook(void* pThis, TaskbarEdge edge) {
+    TaskbarEdge result = GetCurrentTaskbarEdge_Original(pThis, edge);
+    return g_unloading ? result : TaskbarEdge::Bottom;
+}
+
+std::atomic<bool> g_startMenuDllHooked = false;
+
+bool HookStartMenuDll(HMODULE module) {
+    WindhawkUtils::SYMBOL_HOOK hooks[] = {
+        {{LR"(private: enum winrt::StartMenu::implementation::DockedAnimationTypes::TaskbarEdge __cdecl winrt::StartMenu::implementation::StartBlendedFlexFrame::GetCurrentTaskbarEdge(enum winrt::StartMenu::implementation::DockedAnimationTypes::TaskbarEdge))"},
+         &GetCurrentTaskbarEdge_Original, GetCurrentTaskbarEdge_Hook},
+    };
+    if (WindhawkUtils::HookSymbols(module, hooks, ARRAYSIZE(hooks))) return true;
+    Wh_Log(L"Not hooked, so Start uses the taskbar edge Windows gives it");
+    return false;
+}
+
+// Hooks StartMenu.dll if it's loaded and not hooked yet. Returns whether it
+// was hooked now.
+bool HookStartMenuDllIfLoaded() {
+    HMODULE module = GetModuleHandle(L"StartMenu.dll");
+    return module && !g_startMenuDllHooked.exchange(true) && HookStartMenuDll(module);
+}
+
+using LoadLibraryExW_t = decltype(&LoadLibraryExW);
+LoadLibraryExW_t LoadLibraryExW_Original;
+HMODULE WINAPI LoadLibraryExW_Hook(LPCWSTR name, HANDLE file, DWORD flags) {
+    HMODULE module = LoadLibraryExW_Original(name, file, flags);
+    if (module && !g_startMenuDllHooked && HookStartMenuDllIfLoaded()) {
+        Wh_ApplyHookOperations();
+    }
+    return module;
+}
+
+// Start's XAML starts up, as Start's process starts after the mod.
+using RoGetActivationFactory_t = decltype(&RoGetActivationFactory);
+RoGetActivationFactory_t RoGetActivationFactory_Original;
+HRESULT WINAPI RoGetActivationFactory_Hook(HSTRING id, REFIID iid, void** factory) {
+    thread_local bool inside = false;
+    if (inside) return RoGetActivationFactory_Original(id, iid, factory);
+    inside = true;
+    if (!g_unloading &&
+        !wcscmp(WindowsGetStringRawBuffer(id, nullptr), L"Windows.UI.Xaml.Hosting.XamlIsland")) {
+        Try(InitStart, L"Start");
+    }
+    HRESULT result = RoGetActivationFactory_Original(id, iid, factory);
+    inside = false;
+    return result;
+}
+
+// --- The tray's menus, in ShellHost.exe and ShellExperienceHost.exe ---------
+
+// The tray's menus' windows: Quick Settings' in ShellHost.exe (or, before
+// 24H2, a CoreWindow of ShellExperienceHost.exe), and the Notification
+// Center's, a CoreWindow of ShellExperienceHost.exe.
+enum class TrayMenu { None, QuickSettings, NotificationCenter };
+
+TrayMenu TrayMenuOf(HWND w) {
+    DWORD pid = 0;
+    DWORD tid = w ? GetWindowThreadProcessId(w, &pid) : 0;
+    if (!tid || pid != GetCurrentProcessId()) return TrayMenu::None;
+    if (HasClass(w, L"ControlCenterWindow")) return TrayMenu::QuickSettings;
+    if (!HasClass(w, L"Windows.UI.Core.CoreWindow")) return TrayMenu::None;
+    std::wstring thread = ThreadName(tid);
+    if (thread == L"QuickActions") return TrayMenu::QuickSettings;
+    if (thread == L"ActionCenter") return TrayMenu::NotificationCenter;
+    return TrayMenu::None;
+}
+
+// The part of a window that shows, in window coordinates: its region, if it
+// has one, or all of it.
+RECT ShownPart(HWND w, int cx, int cy) {
+    RECT box{0, 0, cx, cy};
+    if (HRGN region = CreateRectRgn(0, 0, 0, 0)) {
+        RECT part;
+        int kind = GetWindowRgn(w, region);
+        if ((kind == SIMPLEREGION || kind == COMPLEXREGION) && GetRgnBox(region, &part) &&
+            part.right - part.left > 1 && part.bottom - part.top > 1) {
+            box = part;
+        }
+        DeleteObject(region);
+    }
+    return box;
+}
+
+// Where Quick Settings' window's top goes. Its window is as tall as the
+// screen, and only its region, the panel, shows: that's centered on the
+// screen. Windows already has it at the right edge, sliding in from there.
+LONG QuickSettingsTop(HWND w, int x, int y, int cx, int cy) {
+    RECT rect{x, y, x + cx, y + cy};
+    RECT shown = ShownPart(w, cx, cy);
+    return ScreenMiddleTop(MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST), shown.top,
+                           shown.bottom);
+}
+
+// Every move of Quick Settings' window comes through here, whoever makes it
+// and however. Only its top is changed.
+void PlaceQuickSettings(HWND w, WINDOWPOS& pos) {
+    if ((pos.flags & (SWP_NOMOVE | SWP_NOSIZE)) == (SWP_NOMOVE | SWP_NOSIZE)) return;
+    RECT rect;
+    if (!GetWindowRect(w, &rect)) return;
+    // Resized where it is: placed again too, to stay centered.
+    int x = (pos.flags & SWP_NOMOVE) ? rect.left : pos.x;
+    int y = (pos.flags & SWP_NOMOVE) ? rect.top : pos.y;
+    int cx = (pos.flags & SWP_NOSIZE) ? rect.right - rect.left : pos.cx;
+    int cy = (pos.flags & SWP_NOSIZE) ? rect.bottom - rect.top : pos.cy;
+    LONG top = QuickSettingsTop(w, x, y, cx, cy);
+    if (top == y) return;
+    pos.x = x;
+    pos.y = top;
+    pos.flags &= ~SWP_NOMOVE;
+}
+
+// Its region changes as its panel grows or shrinks, and is set anew each time
+// it opens, sometimes after the window's been placed: it's placed again.
+void PlaceQuickSettingsAgain(HWND w) {
+    RECT rect;
+    if (!GetWindowRect(w, &rect)) return;
+    LONG top = QuickSettingsTop(w, rect.left, rect.top, rect.right - rect.left,
+                                rect.bottom - rect.top);
+    if (top == rect.top) return;
+    SetWindowPos(w, nullptr, rect.left, top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+bool IsQuickSettingsWindow(HWND w) {
+    return HasClass(w, L"ControlCenterWindow") ||
+           (g_host != Host::Explorer && TrayMenuOf(w) == TrayMenu::QuickSettings);
+}
+
+// The menus' shadows are taken off on their UI thread, as each is shown and
+// whenever anything in it gets focus. A XAML island's content is found from
+// what gets focus, a CoreWindow's from its window.
+[[clang::no_destroy]] thread_local winrt::weak_ref<wux::UIElement> t_trayRoot;
+thread_local std::chrono::steady_clock::time_point t_trayStripped;
+thread_local winrt::event_token t_trayFocus;
+constexpr auto kStripAgainAfter = std::chrono::milliseconds(100);
+
+// The menu's own content, not a popup's.
+wux::UIElement TrayRoot(wux::DependencyObject const& inside) {
+    wux::UIElement el = inside ? inside.try_as<wux::UIElement>() : wux::UIElement{nullptr};
+    if (el) {
+        if (auto root = el.XamlRoot(); root && root.Content()) return root.Content();
+    }
+    wux::UIElement root{nullptr};
+    Try([&] {
+        if (auto window = wux::Window::Current()) root = window.Content();
+    });
+    return root ? root : t_trayRoot.get();
+}
+
+// Walked again right away while nothing's found, as the menu may not be built
+// yet.
+void StripTrayShadows(wux::DependencyObject const& inside = nullptr) {
+    if (g_unloading) return;
+    auto root = TrayRoot(inside);
+    if (!root) return;
+    auto now = std::chrono::steady_clock::now();
+    if (root == t_trayRoot.get() && now - t_trayStripped < kStripAgainAfter) return;
+    t_trayRoot = winrt::make_weak(root);
+    t_trayStripped = StripShadows(root) ? now : std::chrono::steady_clock::time_point{};
+}
+
+// Once the thread's XAML is up.
+void WatchTrayFocus() {
+    if (t_trayFocus || g_unloading) return;
+    t_trayFocus = wuxi::FocusManager::GotFocus(
+        [](wf::IInspectable const&, wuxi::FocusManagerGotFocusEventArgs const& args) {
+            Try([&] { StripTrayShadows(args.NewFocusedElement()); }, L"Removing shadows");
+        });
+}
+
+void UnwatchTrayFocus() {
+    if (t_trayFocus) Try([] { wuxi::FocusManager::GotFocus(t_trayFocus); });
+    t_trayFocus = {};
+    t_trayRoot = nullptr;
+}
+
+// Overrides made on this thread back, as XAML objects belong to theirs.
+void RestoreOverridesHere() {
+    g_overrides->remove_if([](Override const& o) {
+        auto el = o.element.get();
+        bool here = true;
+        Try([&] { here = !el || el.Dispatcher().HasThreadAccess(); });
+        if (here) Restore(o);
+        return here;
+    });
+}
+
+UINT StripMessage() {
+    static const UINT message = RegisterWindowMessage(L"Windhawk_StripShadows_" WH_MOD_ID);
+    return message;
+}
+
+// The menus' windows are subclassed: Quick Settings' to be placed whenever
+// it's moved, and each to have its shadows taken off as it's shown, which is
+// left to its message loop.
+constexpr UINT_PTR kTrayMenuSubclass = 0x4D445153;  // "MDQS"
+std::mutex g_trayMenusLock;
+std::vector<HWND> g_trayMenus;
+
+LRESULT CALLBACK TrayMenuProc(HWND w, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR id,
+                              DWORD_PTR kind) {
+    if (message == WM_WINDOWPOSCHANGING && lParam && !g_unloading &&
+        (TrayMenu)kind == TrayMenu::QuickSettings) {
+        PlaceQuickSettings(w, *(WINDOWPOS*)lParam);
+    } else if (message == StripMessage() && message) {
+        Try(WatchTrayFocus);
+        Try([] { StripTrayShadows(); }, L"Removing shadows");
+        return 0;
+    } else if ((message == WM_ACTIVATE && LOWORD(wParam) != WA_INACTIVE) ||
+               (message == WM_SHOWWINDOW && wParam) || message == WM_WINDOWPOSCHANGED) {
+        if (!g_unloading) PostMessage(w, StripMessage(), 0, 0);
+    } else if (message == WM_NCDESTROY) {
+        RemoveWindowSubclass(w, TrayMenuProc, id);
+        std::lock_guard lock(g_trayMenusLock);
+        std::erase(g_trayMenus, w);
+    }
+    return DefSubclassProc(w, message, wParam, lParam);
+}
+
+// On the window's thread.
+void SubclassTrayMenu(HWND w, TrayMenu kind) {
+    if (g_unloading) return;
+    {
+        std::lock_guard lock(g_trayMenusLock);
+        if (std::ranges::find(g_trayMenus, w) != g_trayMenus.end()) return;
+        if (!SetWindowSubclass(w, TrayMenuProc, kTrayMenuSubclass, (DWORD_PTR)kind)) return;
+        g_trayMenus.push_back(w);
+    }
+    PostMessage(w, StripMessage(), 0, 0);
+    if (kind != TrayMenu::QuickSettings) return;
+    PlaceQuickSettingsAgain(w);
+}
+
+// From another thread only as the mod loads: hooks can run on threads
+// waiting for the window's, which this would wait for in turn.
+void SubclassIfTrayMenu(HWND w, bool anyThread = false) {
+    TrayMenu kind = g_unloading ? TrayMenu::None : TrayMenuOf(w);
+    if (kind == TrayMenu::None) return;
+    if (GetWindowThreadProcessId(w, nullptr) == GetCurrentThreadId()) {
+        SubclassTrayMenu(w, kind);
+    } else if (anyThread) {
+        struct Param {
+            HWND w;
+            TrayMenu kind;
+        } param{w, kind};
+        RunFromWindowThread(
+            w, [](void* p) { SubclassTrayMenu(((Param*)p)->w, ((Param*)p)->kind); }, &param);
+    }
+}
+
+// The windows are found as they're created, or, if they already were, as the
+// mod loads. Their first placement also finds them, should they be created
+// some other way.
+using CreateWindowExW_t = decltype(&CreateWindowExW);
+CreateWindowExW_t CreateWindowExW_Original;
+HWND WINAPI CreateWindowExW_Hook(DWORD exStyle, LPCWSTR cls, LPCWSTR title, DWORD style, int x,
+                                 int y, int cx, int cy, HWND parent, HMENU menu,
+                                 HINSTANCE instance, LPVOID param) {
+    HWND w = CreateWindowExW_Original(exStyle, cls, title, style, x, y, cx, cy, parent, menu,
+                                      instance, param);
+    SubclassIfTrayMenu(w);
+    return w;
+}
+
+using CreateWindowInBand_t = HWND(WINAPI*)(DWORD exStyle, LPCWSTR cls, LPCWSTR title,
+                                           DWORD style, int x, int y, int cx, int cy,
+                                           HWND parent, HMENU menu, HINSTANCE instance,
+                                           LPVOID param, DWORD band);
+CreateWindowInBand_t CreateWindowInBand_Original;
+HWND WINAPI CreateWindowInBand_Hook(DWORD exStyle, LPCWSTR cls, LPCWSTR title, DWORD style,
+                                    int x, int y, int cx, int cy, HWND parent, HMENU menu,
+                                    HINSTANCE instance, LPVOID param, DWORD band) {
+    HWND w = CreateWindowInBand_Original(exStyle, cls, title, style, x, y, cx, cy, parent, menu,
+                                         instance, param, band);
+    SubclassIfTrayMenu(w);
+    return w;
+}
+
+using CreateWindowInBandEx_t = HWND(WINAPI*)(DWORD exStyle, LPCWSTR cls, LPCWSTR title,
+                                             DWORD style, int x, int y, int cx, int cy,
+                                             HWND parent, HMENU menu, HINSTANCE instance,
+                                             LPVOID param, DWORD band, DWORD flags);
+CreateWindowInBandEx_t CreateWindowInBandEx_Original;
+HWND WINAPI CreateWindowInBandEx_Hook(DWORD exStyle, LPCWSTR cls, LPCWSTR title, DWORD style,
+                                      int x, int y, int cx, int cy, HWND parent, HMENU menu,
+                                      HINSTANCE instance, LPVOID param, DWORD band,
+                                      DWORD flags) {
+    HWND w = CreateWindowInBandEx_Original(exStyle, cls, title, style, x, y, cx, cy, parent,
+                                           menu, instance, param, band, flags);
+    SubclassIfTrayMenu(w);
+    return w;
+}
+
+using SetWindowPos_t = decltype(&SetWindowPos);
+SetWindowPos_t HostSetWindowPos_Original;
+BOOL WINAPI HostSetWindowPos_Hook(HWND w, HWND after, int x, int y, int cx, int cy, UINT flags) {
+    if (!g_unloading && (flags & (SWP_NOMOVE | SWP_NOSIZE)) != (SWP_NOMOVE | SWP_NOSIZE)) {
+        SubclassIfTrayMenu(w);
+    }
+    return HostSetWindowPos_Original(w, after, x, y, cx, cy, flags);
+}
+
+void FindTrayMenus() {
+    EnumWindows(
+        [](HWND w, LPARAM) -> BOOL {
+            SubclassIfTrayMenu(w, true);
+            return TRUE;
+        },
+        0);
+}
+
+// On each window's thread, before the mod's code goes away. Windows places
+// Quick Settings again as it opens.
+void ReleaseTrayMenus() {
+    std::vector<HWND> windows;
+    {
+        std::lock_guard lock(g_trayMenusLock);
+        windows.swap(g_trayMenus);
+    }
+    for (HWND w : windows) {
+        if (!IsWindow(w)) continue;
+        RunFromWindowThread(
+            w,
+            [](void* p) {
+                Try(UnwatchTrayFocus);
+                RestoreOverridesHere();
+                RemoveWindowSubclass((HWND)p, TrayMenuProc, kTrayMenuSubclass);
+            },
+            w);
+    }
+}
+
+// The tray's menus read the taskbar's side here, on Windows that can move the
+// taskbar, and slide in from it.
+constexpr WCHAR kTaskbarSettingsKey[] =
+    LR"(SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced)";
+using RegGetValueW_t = decltype(&RegGetValueW);
+RegGetValueW_t RegGetValueW_Original;
+LONG WINAPI RegGetValueW_Hook(HKEY key, LPCWSTR subKey, LPCWSTR value, DWORD flags, LPDWORD type,
+                              PVOID data, LPDWORD size) {
+    DWORD room = size ? *size : 0;
+    LONG result = RegGetValueW_Original(key, subKey, value, flags, type, data, size);
+    if (g_unloading || key != HKEY_CURRENT_USER || !subKey ||
+        _wcsicmp(subKey, kTaskbarSettingsKey) || !value || _wcsicmp(value, L"TaskbarLocation") ||
+        !(flags & RRF_RT_REG_DWORD) || !data || room < sizeof(DWORD)) {
+        return result;
+    }
+    *(DWORD*)data = ABE_RIGHT;
+    *size = sizeof(DWORD);
+    if (type) *type = REG_DWORD;
+    return ERROR_SUCCESS;
+}
+
+// --- Explorer: the Notification Center, and search typed into Start ---------
+
+enum class Flyout { Other, Search, NotificationCenter, Start };
+
+Flyout FlyoutKind(HWND w) {
+    if (!HasClass(w, L"Windows.UI.Core.CoreWindow")) return Flyout::Other;
+    DWORD pid = 0;
+    DWORD tid = GetWindowThreadProcessId(w, &pid);
+    if (!tid) return Flyout::Other;
+    std::wstring process = ProcessName(pid);
+    if (!_wcsicmp(process.c_str(), L"SearchHost.exe")) return Flyout::Search;
+    if (!_wcsicmp(process.c_str(), L"StartMenuExperienceHost.exe")) return Flyout::Start;
+    if ((!_wcsicmp(process.c_str(), L"ShellExperienceHost.exe") ||
+         !_wcsicmp(process.c_str(), L"ShellHost.exe")) &&
+        ThreadName(tid) == L"ActionCenter") {
+        return Flyout::NotificationCenter;
+    }
+    return Flyout::Other;
+}
+
+// Start's window is cloaked while Start is hidden.
+bool StartIsOpen() {
+    bool open = false;
+    EnumWindows(
+        [](HWND w, LPARAM param) -> BOOL {
+            DWORD pid = 0;
+            if (!HasClass(w, L"Windows.UI.Core.CoreWindow") || !GetWindowThreadProcessId(w, &pid) ||
+                _wcsicmp(ProcessName(pid).c_str(), L"StartMenuExperienceHost.exe")) {
+                return TRUE;
+            }
+            BOOL cloaked = FALSE;
+            if (SUCCEEDED(DwmGetWindowAttribute(w, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) &&
+                !cloaked) {
+                *(bool*)param = true;
+            }
+            return FALSE;
+        },
+        (LPARAM)&open);
+    return open;
+}
+
+// A window the mod moved, and where Windows had it. Windows moves some of
+// these itself, some only once, so they're moved back when the mod is done.
+struct Moved {
+    HWND window = nullptr;
+    HMONITOR monitor = nullptr;
+    POINT home{};  // Windows' spot
+    POINT spot{};  // the mod's
+};
+std::mutex g_movedLock;
+Moved g_search, g_notifications;
+
+// Windows are moved outside the lock: they belong to other processes.
+void MoveTo(Moved& m, HWND w, RECT const& rect, HMONITOR monitor, POINT spot) {
+    POINT at{rect.left, rect.top};
+    {
+        std::lock_guard lock(g_movedLock);
+        // Anywhere but the mod's spot, Windows has placed it.
+        bool placed = m.window != w || m.monitor != monitor || at.x != m.spot.x || at.y != m.spot.y;
+        m = {w, monitor, placed ? at : m.home, spot};
+    }
+    if (at.x == spot.x && at.y == spot.y) return;
+    SetWindowPos(w, nullptr, spot.x, spot.y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+// Back where Windows had it, unless Windows has placed it since. With
+// `only`, just that window.
+void MoveBack(Moved& m, HWND only = nullptr) {
+    Moved was;
+    {
+        std::lock_guard lock(g_movedLock);
+        if (!m.window || (only && m.window != only)) return;
+        was = std::exchange(m, {});
+    }
+    RECT rect;
+    if (!IsWindow(was.window) || !GetWindowRect(was.window, &rect) || rect.left != was.spot.x ||
+        rect.top != was.spot.y ||
+        MonitorFromWindow(was.window, MONITOR_DEFAULTTONEAREST) != was.monitor) {
+        return;
+    }
+    SetWindowPos(was.window, nullptr, was.home.x, was.home.y, 0, 0,
+                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+// Search, opened by typing into Start, takes Start's spot: the screen's
+// center.
+void PlaceSearch(HWND w) {
+    RECT rect;
+    if (!GetWindowRect(w, &rect)) return;
+    HMONITOR monitor = MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST);
+    LONG cx = rect.right - rect.left, cy = rect.bottom - rect.top;
+    MONITORINFO info{.cbSize = sizeof(info)};
+    GetMonitorInfo(monitor, &info);
+    RECT const& m = info.rcMonitor;
+    MoveTo(g_search, w, rect, monitor,
+           {m.left + (m.right - m.left - cx) / 2, m.top + (m.bottom - m.top - cy) / 2});
+}
+
+// The Notification Center's visible part, its region, is centered top to
+// bottom. Its window can be taller.
+void CenterNotifications(HWND w, HRGN region) {
+    RECT rect, visible;
+    if (!GetWindowRect(w, &rect)) return;
+    int kind = region ? GetRgnBox(region, &visible) : ERROR;
+    if (kind == ERROR || kind == NULLREGION) {
+        visible = {0, 0, rect.right - rect.left, rect.bottom - rect.top};
+    }
+    // Windows' placeholders, while it builds its views.
+    if (visible.right - visible.left <= 1 || visible.bottom - visible.top <= 1) return;
+    RECT shown = visible;
+    OffsetRect(&shown, rect.left, rect.top);
+    HMONITOR monitor = MonitorFromRect(&shown, MONITOR_DEFAULTTONEAREST);
+    LONG top = ScreenMiddleTop(monitor, visible.top, visible.bottom);
+    MoveTo(g_notifications, w, rect, monitor, {rect.left, top});
+}
+
+using DwmSetWindowAttribute_t = decltype(&DwmSetWindowAttribute);
+DwmSetWindowAttribute_t DwmSetWindowAttribute_Original;
+HRESULT WINAPI DwmSetWindowAttribute_Hook(HWND w, DWORD attribute, LPCVOID value, DWORD size) {
+    auto original = [&] { return DwmSetWindowAttribute_Original(w, attribute, value, size); };
+    if (attribute != DWMWA_CLOAK || size != sizeof(BOOL) || !value || g_unloading) {
+        return original();
+    }
+    bool cloak = *(BOOL const*)value;
+    switch (FlyoutKind(w)) {
+        case Flyout::Search:
+            // Search is shown again, by Win+S or the taskbar's search box, where
+            // it was last: it goes back to Windows' spot as it's hidden.
+            if (cloak) {
+                HRESULT result = original();
+                MoveBack(g_search, w);
+                return result;
+            }
+            if (g_controlStart && StartIsOpen()) PlaceSearch(w);
+            else MoveBack(g_search, w);
+            break;
+        case Flyout::NotificationCenter:
+            if (!cloak && g_controlTray) {
+                HRGN region = CreateRectRgn(0, 0, 0, 0);
+                if (region && GetWindowRgn(w, region) == ERROR) {
+                    DeleteObject(region);
+                    region = nullptr;
+                }
+                CenterNotifications(w, region);
+                if (region) DeleteObject(region);
+            }
+            break;
+        case Flyout::Start:
+        case Flyout::Other:
+            break;
+    }
+    return original();
+}
+
+// Start's window is given a region, the part of it that shows, where Windows
+// works out Start's frame is. Once the frame's centered, Windows puts it a
+// little too far right and down, which cuts off the frame's left and top. The
+// frame is centered on the screen, so the region is centered there too,
+// keeping its size.
+void CenterStartRegion(HWND w, HRGN region) {
+    RECT box, window;
+    int kind = GetRgnBox(region, &box);
+    if (kind == ERROR || kind == NULLREGION || !GetWindowRect(w, &window)) return;
+    MONITORINFO info{.cbSize = sizeof(info)};
+    if (!GetMonitorInfo(MonitorFromWindow(w, MONITOR_DEFAULTTONEAREST), &info)) return;
+    RECT const& m = info.rcMonitor;
+    LONG dx = ((m.left + m.right) - (box.left + box.right)) / 2 - window.left;
+    LONG dy = ((m.top + m.bottom) - (box.top + box.bottom)) / 2 - window.top;
+    if (dx || dy) OffsetRgn(region, dx, dy);
+}
+
+// The Notification Center and Quick Settings are given a region whenever
+// their size changes, and Start each time it opens.
+using SetWindowRgn_t = decltype(&SetWindowRgn);
+SetWindowRgn_t SetWindowRgn_Original;
+int WINAPI SetWindowRgn_Hook(HWND w, HRGN region, BOOL redraw) {
+    // Before Windows takes the region, as it owns it after.
+    if (region && !g_unloading) {
+        switch (FlyoutKind(w)) {
+            case Flyout::NotificationCenter:
+                if (g_controlTray) CenterNotifications(w, region);
+                break;
+            case Flyout::Start:
+                if (g_controlStart) CenterStartRegion(w, region);
+                break;
+            case Flyout::Search:
+            case Flyout::Other:
+                break;
+        }
+    }
+    int result = SetWindowRgn_Original(w, region, redraw);
+    if (result && region && !g_unloading && g_controlTray && IsQuickSettingsWindow(w)) {
+        PlaceQuickSettingsAgain(w);
+    }
+    return result;
+}
+
+// --- Loading and unloading ---------------------------------------------------
+
+Host CurrentHost() {
+    WCHAR path[MAX_PATH];
+    DWORD length = GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+    if (!length || length == ARRAYSIZE(path)) return Host::Explorer;
+    PCWSTR file = wcsrchr(path, L'\\');
+    file = file ? file + 1 : path;
+    if (!_wcsicmp(file, L"StartMenuExperienceHost.exe")) return Host::Start;
+    if (!_wcsicmp(file, L"ShellExperienceHost.exe")) return Host::ShellExperience;
+    if (!_wcsicmp(file, L"ShellHost.exe")) return Host::Shell;
+    if (!_wcsicmp(file, L"SearchHost.exe")) return Host::Search;
+    return Host::Explorer;
+}
+
+void HookExplorer() {
+    if (auto f = SystemFunction<DwmSetWindowAttribute_t>(L"dwmapi.dll", "DwmSetWindowAttribute")) {
+        WindhawkUtils::SetFunctionHook(f, DwmSetWindowAttribute_Hook,
+                                       &DwmSetWindowAttribute_Original);
+    }
+    WindhawkUtils::SetFunctionHook(SetWindowRgn, SetWindowRgn_Hook, &SetWindowRgn_Original);
+}
+
+// Explorer: what's moved back as the mod unloads (`all`), or as its setting is
+// turned off.
+void RestoreExplorer(bool all) {
+    if (all || !g_controlStart) MoveBack(g_search);
+    if (all || !g_controlTray) MoveBack(g_notifications);
+}
+
+// In Start's or the tray menus' process. Not staying loaded where it's
+// turned off.
+BOOL InitHost() {
+    g_unloading = false;  // in case the mod is reloaded in place
+    g_startMenuDllHooked = false;
+    LoadMenuSettings();
+    if (g_host == Host::Search) {
+        if (!g_controlStart) return FALSE;
+        WindhawkUtils::SetFunctionHook(SystemParametersInfoW, SystemParametersInfoW_Hook,
+                                       &SystemParametersInfoW_Original);
+        return TRUE;
+    }
+    if (g_host == Host::Start) {
+        if (!g_controlStart) return FALSE;
+        if (auto f = SystemFunction<RoGetActivationFactory_t>(L"api-ms-win-core-winrt-l1-1-0.dll",
+                                                              "RoGetActivationFactory")) {
+            WindhawkUtils::SetFunctionHook(f, RoGetActivationFactory_Hook,
+                                           &RoGetActivationFactory_Original);
+        }
+        WindhawkUtils::SetFunctionHook(SystemParametersInfoW, SystemParametersInfoW_Hook,
+                                       &SystemParametersInfoW_Original);
+        WindhawkUtils::SetFunctionHook(SetWindowRgn, SetWindowRgn_Hook, &SetWindowRgn_Original);
+        if (!HookStartMenuDllIfLoaded() && !g_startMenuDllHooked) {
+            if (auto f = SystemFunction<LoadLibraryExW_t>(L"kernelbase.dll", "LoadLibraryExW")) {
+                WindhawkUtils::SetFunctionHook(f, LoadLibraryExW_Hook, &LoadLibraryExW_Original);
+            }
+        }
+        return TRUE;
+    }
+    if (!g_controlTray) return FALSE;
+    WindhawkUtils::SetFunctionHook(SetWindowPos, HostSetWindowPos_Hook, &HostSetWindowPos_Original);
+    WindhawkUtils::SetFunctionHook(SetWindowRgn, SetWindowRgn_Hook, &SetWindowRgn_Original);
+    WindhawkUtils::SetFunctionHook(CreateWindowExW, CreateWindowExW_Hook,
+                                   &CreateWindowExW_Original);
+    if (auto f = SystemFunction<CreateWindowInBand_t>(L"user32.dll", "CreateWindowInBand")) {
+        WindhawkUtils::SetFunctionHook(f, CreateWindowInBand_Hook, &CreateWindowInBand_Original);
+    }
+    if (auto f = SystemFunction<CreateWindowInBandEx_t>(L"user32.dll", "CreateWindowInBandEx")) {
+        WindhawkUtils::SetFunctionHook(f, CreateWindowInBandEx_Hook,
+                                       &CreateWindowInBandEx_Original);
+    }
+    if (auto f = SystemFunction<RegGetValueW_t>(L"kernelbase.dll", "RegGetValueW")) {
+        WindhawkUtils::SetFunctionHook(f, RegGetValueW_Hook, &RegGetValueW_Original);
+    }
+    return TRUE;
+}
+
+void AfterInitHost() {
+    if (g_host == Host::Search) {
+        TellAnimationsChanged();
+        return;
+    }
+    if (g_host == Host::Start) {
+        if (HookStartMenuDllIfLoaded()) Wh_ApplyHookOperations();
+        TellAnimationsChanged();
+        if (HWND w = StartWindow()) {
+            RunFromWindowThread(w, [](void*) { Try(InitStart, L"Start"); }, nullptr);
+        }
+        return;
+    }
+    FindTrayMenus();
+}
+
+void UninitHost() {
+    if (g_host == Host::Search) return;
+    if (g_host != Host::Start) {
+        ReleaseTrayMenus();
+        return;
+    }
+    if (HWND w = StartWindow()) {
+        RunFromWindowThread(w, [](void*) { Try(UninitStart, L"Putting Start back"); }, nullptr);
+    }
+}
+
+// Once the hooks are out: Start and search read Windows' own animation
+// setting again.
+void AfterUninitHost() {
+    if (g_host == Host::Start || g_host == Host::Search) TellAnimationsChanged();
+}
+
+}  // namespace Menus
+
+// =============================================================================
 // WINDHAWK ENTRY POINTS
 // =============================================================================
 
 BOOL Wh_ModInit() {
+    // In Start's or the tray menus' process, only they're moved.
+    Menus::g_host = Menus::CurrentHost();
+    if (Menus::g_host != Menus::Host::Explorer) return Menus::InitHost();
+
     LoadSettings();
+    Menus::LoadMenuSettings();
     g_managingAutoHide = Wh_GetIntValue(UserValueName(L"managingAutoHide").c_str(), 0);
     g_autoHideBefore = Wh_GetIntValue(UserValueName(L"autoHideBefore").c_str(), 0);
     g_glassStopped = Wh_GetIntValue(UserValueName(L"glassStopped").c_str(), 0) != 0;
@@ -9985,6 +13432,7 @@ BOOL Wh_ModInit() {
     WindhawkUtils::SetFunctionHook(MapWindowPoints, MapWindowPoints_Hook,
                                    &MapWindowPoints_Original);
     WindhawkUtils::SetFunctionHook(SetWindowPos, SetWindowPos_Hook, &SetWindowPos_Original);
+    Menus::HookExplorer();
     g_dockShown = g_settings.autoHide == AutoHide::On ? 0 : 1;  // starts hidden
     return TRUE;
 }
@@ -9992,6 +13440,10 @@ BOOL Wh_ModInit() {
 // Applying the height also makes the taskbar update its buttons, which runs
 // the hooks that find them.
 void Wh_ModAfterInit() {
+    if (Menus::g_host != Menus::Host::Explorer) {
+        Menus::AfterInitHost();
+        return;
+    }
     if (g_taskbarHeight > 0) ApplyTaskbarHeight();
     ApplyMagnifyOverWindows();
 }
@@ -10000,12 +13452,18 @@ void Wh_ModAfterInit() {
 // normal height and icon size.
 void Wh_ModBeforeUninit() {
     g_unloading = true;
+    if (Menus::g_host != Menus::Host::Explorer) {
+        Menus::UninitHost();
+        return;
+    }
+    Menus::RestoreExplorer(true);
     RestoreTaskViews();
 
     // The elements first, so the taskbar sizes its icons itself below. Then any
     // cancelled async work's callbacks, which the taskbar's thread runs meanwhile.
     if (HWND tb = FindTaskbar()) RunFromWindowThread(tb, [](void*) { ResetAll(); }, nullptr);
     StopHotkeys();
+    StopInfoKeys();
     // In case the taskbar's thread couldn't run ResetAll: the capture threads
     // stopped, and the taskbar back in screenshots.
     JoinWorkers();
@@ -10034,9 +13492,22 @@ void Wh_ModBeforeUninit() {
     }
 }
 
+void Wh_ModUninit() {
+    Menus::AfterUninitHost();
+}
+
 // Settings are read on the taskbar's thread, where the frame loop and hooks
-// read them. Plates are rebuilt on the next frame.
-void Wh_ModSettingsChanged() {
+// read them. Plates are rebuilt on the next frame. Start's and the tray menus'
+// processes start over, which takes the mod out of them if it's turned off
+// there.
+BOOL Wh_ModSettingsChanged(BOOL* reload) {
+    if (Menus::g_host != Menus::Host::Explorer) {
+        *reload = TRUE;
+        return TRUE;
+    }
+    Menus::LoadMenuSettings();
+    Menus::RestoreExplorer(false);
+
     int oldTaskbarHeight = g_taskbarHeight;
     float oldIconLoadSize = g_size.iconLoadSize;
 
@@ -10051,7 +13522,9 @@ void Wh_ModSettingsChanged() {
         Settings old = g_settings;
         LoadSettings();
         RecolorSquircles(old);
-        Try(HideLabel);  // redrawn in the new color
+        CloseInfoCard();  // what it says may have changed
+        Try(HideLabel);   // redrawn in the new color
+        ForgetLabelFont();  // looked for again, in case it's been installed
         // Liquid Glass starts over, at the new sizes, below.
         g_glassFailed = false;
         g_glassFailures = 0;
@@ -10063,6 +13536,7 @@ void Wh_ModSettingsChanged() {
         Try(RemoveStartIcons);
         Try(UpdatePolling);
         g_finderIconSource.reset();  // reloaded at the new size and image
+        g_appIconSources.clear();
         SettleIconsAgain();
         Try(ReleaseStillIcons);  // held again below, if still on
         for (auto& b : *g_buttons) {
@@ -10080,4 +13554,5 @@ void Wh_ModSettingsChanged() {
         ApplyTaskbarHeight();
     }
     ApplyMagnifyOverWindows();
+    return TRUE;
 }
