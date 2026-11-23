@@ -2,7 +2,7 @@
 // @id              macos-style-dock
 // @name            MacOS Style Dock
 // @description     Turns the Windows 11 taskbar into a macOS-style dock with magnifying icons
-// @version         1.2.2
+// @version         1.2.3
 // @author          Zach Vaughn
 // @github          https://github.com/zachvdev
 // @include         explorer.exe
@@ -211,6 +211,10 @@ mod's log says why, whenever the frosted glass is used instead.
 - **Magnification.** Icons grow as the pointer passes over them, pushing
   their neighbors aside, and the dock stretches to fit. As on a Mac, the end
   farther from the pointer stays put.
+- **Shrinks to fit.** As on a Mac, with more apps open than fit, the dock's
+  icons get smaller, rather than the dock running into the tray or being
+  pushed off center. It leaves room for the tray (unless it's hidden for
+  good) and for icons at their most magnified, and grows back as apps close.
 - **Sharp at any size.** App icons are loaded at their fully magnified size,
   so they don't blur as they grow. Some apps give Windows only a small icon,
   which would come back tiny at that size: those get the icon Start shows for
@@ -394,8 +398,9 @@ button is held or a full screen app is running.
 
 Start opens in the middle of the screen, fading in as it grows from three
 quarters of its size to its full size. Quick Settings (Wi-Fi, sound and so
-on) and the Notification Center (with the calendar) open at the middle of the
-screen's right edge and slide in from the right. Typing into Start opens
+on) and the Notification Center (with the calendar) open at the screen's
+right edge just above the taskbar, and slide in from the right. Typing into
+Start opens
 search in Start's place, where it opens and closes without sliding. Start,
 Quick Settings and the Notification Center have no drop shadow.
 
@@ -403,7 +408,7 @@ Quick Settings and the Notification Center have no drop shadow.
   them, as if "Animation effects" were turned off for them alone.
 - **Sliding in from the right** needs Windows 11 version 26H2 (which can move
   the taskbar to the screen's sides) for Quick Settings. Otherwise it still
-  opens at the middle of the right edge, but slides up as before.
+  opens just above the taskbar at the right edge, but slides up as before.
 - **These menus are run by other Windows processes**, so the mod also loads
   into StartMenuExperienceHost.exe, SearchHost.exe, ShellHost.exe and
   ShellExperienceHost.exe, only to change them. Turn off "Control Start Menu"
@@ -920,7 +925,7 @@ ALTaleX's OpenGlass) showed how a taskbar can be given real refraction.
     $description: Start opens in the middle of the screen, fading in as it grows, without a drop shadow, and search, typed into Start, opens and closes in its place without sliding. Turn off to leave them to Windows or another mod; this mod then stays out of their processes. (Default = Enabled)
   - controlTray: true
     $name: Control System Tray Menus
-    $description: Quick Settings and the Notification Center open at the middle of the screen's right edge, sliding in from the right, without drop shadows. Turn off to leave them to Windows or another mod; this mod then stays out of their processes. (Default = Enabled)
+    $description: Quick Settings and the Notification Center open at the screen's right edge just above the taskbar, sliding in from the right, without drop shadows. Turn off to leave them to Windows or another mod; this mod then stays out of their processes. (Default = Enabled)
   $name: Start and Tray Menus
 - tooltips:
   - color: ""
@@ -1062,6 +1067,7 @@ namespace wuxc = winrt::Windows::UI::Xaml::Controls;
 namespace wuxh = winrt::Windows::UI::Xaml::Hosting;
 namespace wuxi = winrt::Windows::UI::Xaml::Input;
 namespace wuxm = winrt::Windows::UI::Xaml::Media;
+namespace wuxma = winrt::Windows::UI::Xaml::Media::Animation;
 namespace wuxs = winrt::Windows::UI::Xaml::Shapes;
 namespace wgdx = winrt::Windows::Graphics::DirectX;
 
@@ -1512,15 +1518,19 @@ struct Sizes {
 
 int g_taskbarHeight = 0;      // 0 = the taskbar's normal height (while unloading)
 
+// The dock's icons as "Size" sets them, and as they are while it's shrunk to
+// fit the screen (see FITTING), as on a Mac: 0 when it isn't.
+float g_fullIcon = 0;
+float g_fitIcon = 0;
+constexpr float kMinFitIcon = kStockIconSize;  // it shrinks no smaller
+
 bool DockSizesIcons() { return g_taskbarHeight > 0; }
 float DividerInset() { return std::round(g_size.padY * kDividerInsetScale); }
 
-void ComputeSizes() {
+// The dock's sizes with icons `icon` pixels, by the settings.
+Sizes SizesFor(float icon) {
     auto& s = g_settings;
-    auto& z = g_size;
-
-    // Exponential: 0 -> 19px, 20 -> 25px, 60 -> 44px, 100 -> 77px.
-    float icon = std::round(kDefaultIconSize * std::exp2((s.size - 60) / 50.0f));
+    Sizes z{};
     float k = icon / kDefaultIconSize;
 
     z.icon = icon;
@@ -1535,7 +1545,6 @@ void ComputeSizes() {
     z.dockRadius = std::round(z.dockHeight * 0.3f);
     z.bottomGap = std::round(icon / 7);
     z.radius = icon * (1 + s.range / 20.0f);
-    z.iconLoadSize = s.highResIcons ? std::ceil(icon * s.scale) : 0;
 
     // Either side of a divider, past the half gap its neighbors hold.
     float room = kDividerGapScale * z.gap;
@@ -1543,6 +1552,23 @@ void ComputeSizes() {
     z.dividerSpace = room + kDividerWidth + room;
     z.trashSlot = icon + z.gap;
     z.trashSpace = (s.dividerBeforeTrash ? z.dividerSpace : 0) + z.trashSlot;
+    return z;
+}
+
+void SaveTaskbarTop();
+
+void ComputeSizes() {
+    auto& s = g_settings;
+    // Exponential: 0 -> 19px, 20 -> 25px, 60 -> 44px, 100 -> 77px.
+    float icon = std::round(kDefaultIconSize * std::exp2((s.size - 60) / 50.0f));
+    g_fullIcon = icon;
+    if (g_fitIcon >= icon) g_fitIcon = 0;
+    g_size = SizesFor(g_fitIcon > 0 ? g_fitIcon : icon);
+
+    // The taskbar's height and the icons' resolution stay as at full size, so
+    // shrinking to fit doesn't move maximized windows or reload icons.
+    Sizes z = SizesFor(icon);
+    g_size.iconLoadSize = s.highResIcons ? std::ceil(icon * s.scale) : 0;
 
     // Tall enough for the dock and a fully magnified icon, plus 2px, with room
     // above the icon for Windows' launch bounce.
@@ -1550,10 +1576,17 @@ void ComputeSizes() {
     float iconTop = z.bottomGap + z.padY + s.scale * icon;
     int height = std::max((int)std::ceil(std::max(dockTop, iconTop) + 2), kMinTaskbarHeight);
     g_taskbarHeight = std::max(height, (int)std::ceil(iconTop + s.scale * icon * kBounceRoom));
-    z.bounceRoom = (float)(g_taskbarHeight - height);
+    // As the dock shrinks, the taskbar keeps its height: the room's above it.
+    g_size.bounceRoom = (float)g_taskbarHeight - std::max(
+        std::ceil(std::max(g_size.bottomGap + g_size.dockHeight,
+                           g_size.bottomGap + g_size.padY + s.scale * g_size.icon) + 2),
+        (float)kMinTaskbarHeight);
 
-    Wh_Log(L"Icon %.0f (loaded at %.0f), dock %.0f, taskbar %d, gap %.0f, padding %.0f x %.0f",
-           z.icon, z.iconLoadSize, z.dockHeight, g_taskbarHeight, z.gap, z.padX, z.padY);
+    auto const& g = g_size;
+    Wh_Log(L"Icon %.0f%s (loaded at %.0f), dock %.0f, taskbar %d, gap %.0f, padding %.0f x %.0f",
+           g.icon, g_fitIcon > 0 ? L" (shrunk to fit)" : L"", g.iconLoadSize, g.dockHeight,
+           g_taskbarHeight, g.gap, g.padX, g.padY);
+    SaveTaskbarTop();
 }
 
 // =============================================================================
@@ -2101,6 +2134,52 @@ std::wstring TrashPath(bool full) {
 
 void MarkPlatesDirty();
 
+// ---- Sliding ----
+// Windows moves buttons to their new places at once (as apps open and close,
+// as the dock shrinks to fit, as apps make way for one that's dragged, as File
+// Explorer's moved first), and the dock with them. Instead, each icon, the
+// Recycle Bin, the dividers and the dock's ends ease there from where they
+// were drawn, as on a Mac. A slide is an offset from where layout puts
+// something, easing out to none.
+
+// Milliseconds, smooth enough to animate with (GetTickCount64 steps by 16).
+float NowMs() {
+    static auto start = std::chrono::steady_clock::now();
+    return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - start)
+        .count();
+}
+
+// As long as magnification takes to settle, about: none with Animation Speed 0.
+float SlideMs() { return g_settings.animationMs * 2.5f; }
+
+// As an app closes (or is unpinned), Windows slides its icon down off the
+// dock first: what moves into its place waits until then, held where it was.
+constexpr float kCloseHoldMs = 250;
+float g_closeHoldUntil = 0;  // NowMs
+
+struct Slide {
+    float from = 0;   // the offset it started at
+    float start = 0;  // NowMs
+    float applied = 0;
+
+    float At(float now) const {
+        float u = SlideMs() > 0 ? (now - start) / SlideMs() : 1;
+        if (from == 0 || u >= 1) return 0;
+        float left = 1 - std::max(0.0f, u);
+        return from * left * left * left;  // ease out
+    }
+    // Moved `by` in layout: drawn where it was, then easing there from
+    // `begin` (held till then, if later).
+    void Moved(float by, float now, float begin) {
+        from = SlideMs() > 0 ? At(now) - by : 0;
+        start = begin;
+    }
+    // Whether it's still moving, or what's drawn is behind where it should be.
+    bool Pending(float now) const {
+        return (from != 0 && now - start < SlideMs()) || std::fabs(At(now) - applied) > 0.01f;
+    }
+};
+
 struct Button {
     winrt::weak_ref<wux::FrameworkElement> element;
     winrt::weak_ref<wux::FrameworkElement> root;  // template root, widened to fit the icon
@@ -2108,6 +2187,9 @@ struct Button {
     double originalIconColumn = 0, appliedIconColumn = 0;
     float extraLeft = 0, extraRight = 0;  // room for the apps divider
     void* impl = nullptr;                 // the taskbar's object for it, to move it
+    float layoutCenter = NAN;             // in its panel, as last measured
+    float rowCenter = NAN;                // in its row, then
+    Slide slide;
 };
 
 [[clang::no_destroy]] std::optional<std::list<Button>> g_buttons{std::in_place};
@@ -2224,6 +2306,16 @@ std::vector<Icon> GetIcons(wux::UIElement const& parent) {
         icons.push_back({el, x, y, (float)el.ActualWidth(), (float)el.ActualHeight(), slot.X});
     }
     return icons;
+}
+
+// Whether layout's moved any of them since they were measured. Each one's
+// looked at, as two apps swapping places (dragged) move none on average.
+bool IconsMoved(std::vector<Icon> const& icons) {
+    for (auto& icon : icons) {
+        Button* b = FindButton(icon.element);
+        if (!b || !(std::fabs(icon.left + icon.width / 2 - b->rowCenter) < 0.25f)) return true;
+    }
+    return false;
 }
 
 // ---- Icon size ----
@@ -2907,7 +2999,10 @@ void ShapeSurface(Surface& s, Look const& look, float w, float h, float r, float
 struct Divider {
     wuxc::Border element{nullptr};
     winrt::weak_ref<wux::FrameworkElement> after;
-    float shift = 0;  // magnification's, as applied
+    float shift = 0;          // as applied: magnification's, and its slide
+    float magnified = 0;      // magnification's
+    float x = NAN;            // in the panel, as last placed
+    Slide slide;
 };
 
 // A dock's Liquid Glass (see LIQUID GLASS): where it's drawn, and from what.
@@ -2943,6 +3038,15 @@ struct Plate {
     size_t iconCount = 0;               // last measured
     Color dotColor{};
     wux::FrameworkElement::SizeChanged_revoker rowSizeChanged, panelSizeChanged;
+    wux::FrameworkElement::LayoutUpdated_revoker panelLayoutUpdated;
+    float appliedExtraLeft = 0, appliedExtra = 0;  // magnification's, as last applied
+    // Its ends and the bin, sliding (see Sliding) from where they were.
+    bool measured = false;
+    size_t layoutCount = 0;  // its icons, as last measured
+    float lastIcon = 0;      // their size then
+    float lastLeft = 0, lastRight = 0, lastTrash = 0;
+    Slide slideLeft, slideRight, slideTrash;
+    float trashScale = 1, trashShift = 0, trashGapShift = 0;  // magnification's
     wux::FrameworkElement::ActualThemeChanged_revoker panelThemeChanged;
 
     // The Recycle Bin and its divider, in the panel past the last button.
@@ -2967,6 +3071,12 @@ struct Plate {
     Color dividerColor{};
 
     float hideY = 0;     // auto-hide's slide, applied to the panel
+
+    // The largest icons it has room for (see FITTING): 0 until it's measured at
+    // the size it's shown at. And where it was last measured.
+    float fitIcon = 0;
+    float lastCenter0 = -1e6f, lastWidth = -1;
+    int unsettled = 0;
 
     GlassPlate glass;
 };
@@ -5224,12 +5334,33 @@ void AddTrash(Plate& p, wuxc::Panel const& panel, wux::UIElement const& row) {
     StartTrash();
 }
 
+// As big as the dock's icons are now: they may have shrunk to fit, or grown back.
+void SizeTrash(Plate& p) {
+    if (!p.trash) return;
+    double width = TrashWidth(), height = g_size.icon * TrashIconScale();
+    if (p.trash.Width() == width && p.trash.Height() == height) return;
+    p.trash.Width(width);
+    p.trash.Height(height);
+    if (p.trashMenuAnchor) {
+        p.trashMenuAnchor.Margin({0, -kTrashMenuLift * g_size.icon / kDefaultIconSize, 0, 0});
+    }
+    p.trashState = -2;  // its icon loaded again, at the new size
+    UpdateTrashIcons();
+}
+
 // Grows from its bottom edge like a button, and shifts with its divider. A
 // XAML transform rather than its composition visual (as for buttons), so the
 // area that takes clicks and drops grows and moves with it: XAML hit-tests by
 // layout and render transforms, not by what composition does to the visual.
 void SetTrashScale(Plate& p, float s, float tx, float dividerTx) {
     if (!p.trash) return;
+    p.trashScale = s;
+    p.trashShift = tx;
+    p.trashGapShift = dividerTx;
+    float slide = p.slideTrash.At(NowMs());
+    p.slideTrash.applied = slide;
+    tx += slide;
+    dividerTx += slide;
     if (!p.trashTransform) {
         p.trashTransform = wuxm::CompositeTransform();
         p.trash.RenderTransform(p.trashTransform);
@@ -5560,7 +5691,22 @@ void UndimDragged() {
     g_draggedButton = g_draggedIcon = nullptr;
 }
 
+// The dragged app follows the pointer (Windows moves it), so it doesn't slide
+// as the others move round it, nor as it's dropped into its place.
+constexpr float kDropSettleMs = 400;
+winrt::weak_ref<wux::FrameworkElement> g_droppedButton;
+float g_droppedAt = -kDropSettleMs;  // NowMs
+
+bool FollowsPointer(wux::FrameworkElement const& button) {
+    if (g_dragging && g_draggedButton.get() == button) return true;
+    return NowMs() < g_droppedAt + kDropSettleMs && g_droppedButton.get() == button;
+}
+
 void EndDragging() {
+    if (g_dragging && g_draggedButton.get()) {
+        g_droppedButton = g_draggedButton;
+        g_droppedAt = NowMs();
+    }
     UndimDragged();
     if (!g_dragging) return;
     g_dragging = false;
@@ -5701,6 +5847,10 @@ float g_growLeftEase = 0;     // what's left of a jump when the end that stays p
 // Scales the icon from its bottom edge, shifts it by `tx`, and moves it down
 // onto the dock.
 void SetScale(wux::FrameworkElement const& el, float s, float tx = 0) {
+    if (Button* b = FindButton(el)) {
+        b->slide.applied = b->slide.At(NowMs());
+        tx += b->slide.applied;
+    }
     auto visual = wuxh::ElementCompositionPreview::GetElementVisual(el);
     float pivotY = (float)el.ActualHeight() / 2 + g_size.icon / 2;
     visual.CenterPoint({(float)el.ActualWidth() / 2, pivotY, 0});
@@ -5718,6 +5868,9 @@ void ReapplyButton(wux::FrameworkElement const& button) {
 }
 
 void SetDividerShift(Divider& d, float tx) {
+    d.magnified = tx;
+    d.slide.applied = d.slide.At(NowMs());
+    tx += d.slide.applied;
     if (!d.element || std::fabs(tx - d.shift) < 0.01f) return;
     d.shift = tx;
     SetTranslation(d.element, tx);
@@ -5883,6 +6036,8 @@ ButtonLayout LayOutButtons(Plate& p, std::vector<Icon> const& icons) {
 }
 
 void NoteIconsMoving();
+ULONGLONG g_slideLogSince = 0;  // [slide] logging, to be removed
+bool g_inLayoutMeasure = false;  // see MeasureAfterLayout
 void ApplyTrayLooks();
 
 // As many dividers as `count`, added or removed at the end.
@@ -5904,6 +6059,164 @@ void MatchDividerCount(Plate& p, wuxc::Panel const& panel, wux::UIElement const&
     }
 }
 
+// =============================================================================
+// FITTING
+// =============================================================================
+// As on a Mac, the dock shrinks rather than run into the tray: its icons as
+// big as leaves room for it, with every one at its widest as magnification
+// spreads them, between the screen's edges, or the tray (unless it's hidden
+// for good), as far from them as the dock is from the bottom. It grows back as
+// apps close. Windows moves centered icons left rather than let them reach the
+// tray; if it does anyway, it's keeping more room there than the tray takes,
+// and the dock leaves that too. The taskbar keeps its height, and icons their
+// resolution, so nothing else moves.
+
+constexpr float kFitHysteresis = 4;  // more room needed to grow back than to stay
+constexpr float kPushedBy = 3;       // Windows has moved the dock this far left: pushed
+
+// How much more room than the tray's Windows keeps at the right of a screen
+// this wide, learned as it pushes the dock left (see FitPlate). It only grows,
+// so the dock doesn't flip between sizes as Windows moves an app in and out
+// of its overflow menu.
+struct {
+    float screen = 0;
+    float extra = 0;
+} g_windowsRoom;
+
+// How far left of center Windows puts the dock anyway, measured away from the
+// edges, on a screen this wide.
+struct {
+    float screen = 0;
+    float off = 0;
+} g_naturalOffset;
+
+std::wstring g_fitLogged;  // [fit] logging, to be removed: what was last logged
+
+float TrayRoomFor(wux::XamlRoot const& root, bool background);
+
+// Whether Windows' taskbar settings center the icons, as the dock needs.
+bool TaskbarCentered() {
+    DWORD value = 1, size = sizeof(value);
+    RegGetValueW(HKEY_CURRENT_USER, LR"(Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced)",
+                 L"TaskbarAl", RRF_RT_REG_DWORD, nullptr, &value, &size);
+    return value != 0;
+}
+
+// The dock's width, unmagnified, with `buttons` icons of size `z`, `dividers`
+// between them, and the bin or not (as MeasurePlate measures it).
+float DockWidthFor(Sizes const& z, size_t buttons, size_t dividers, bool trash) {
+    if (!buttons) return 0;
+    return buttons * (z.icon + z.gap) - z.gap + 2 * z.padX + dividers * z.dividerSpace +
+           (trash ? z.trashSpace : 0);
+}
+
+// How much wider `items` icons of size `z` get, at most, as they magnify: with
+// the pointer over the middle, anywhere across an icon.
+float GrowthRoom(Sizes const& z, size_t items) {
+    float grow = g_settings.scale - 1;
+    if (grow <= 0 || !items || z.radius <= 0) return 0;
+    float pitch = z.icon + z.gap, middle = items * pitch / 2, most = 0;
+    for (int step = 0; step < 8; step++) {
+        float x = middle + step * pitch / 8, sum = 0;
+        for (size_t i = 0; i < items; i++) {
+            float d = std::fabs(x - (i + 0.5f) * pitch);
+            if (d < z.radius) sum += (std::cos(d / z.radius * 3.14159265f) + 1) / 2;
+        }
+        most = std::max(most, sum);
+    }
+    return grow * most * pitch;
+}
+
+// The largest icons `p` has room for, now that it's measured with `icons` and
+// `dividers`; left as it was while the taskbar's still laying them out.
+void FitPlate(Plate& p, std::vector<Icon> const& icons, size_t dividers) {
+    auto panel = p.panel.get();
+    auto root = panel ? panel.XamlRoot() : nullptr;
+    auto content = root ? root.Content().try_as<wux::FrameworkElement>() : nullptr;
+    if (!content || icons.empty() || g_fullIcon <= 0) return;
+    size_t laidOut = 0;
+    for (auto& icon : icons) {
+        if (std::fabs(icon.width - g_size.buttonWidth) <= 1) laidOut++;
+    }
+    if (laidOut * 2 < icons.size()) return;
+
+    float screen = (float)content.ActualWidth(), center = screen / 2;
+    float gap = SizesFor(g_fullIcon).bottomGap;
+    bool trash = (bool)p.trash;
+    size_t items = icons.size() + (trash ? 1 : 0);
+    if (g_windowsRoom.screen != screen) g_windowsRoom = {screen, 0};
+    auto trayRoom = [&] {
+        return (g_settings.tray == Show::Hidden ? 0 : TrayRoomFor(root, true)) +
+               g_windowsRoom.extra;
+    };
+
+    // Pushed left anyway, near the tray, from where Windows centers it while
+    // it's short (which may not be quite the middle): Windows keeps more room
+    // than the tray's, as much more as it takes to stop where it was pushed to.
+    // Only once the taskbar's done: it centers the icons a moment after they're
+    // resized, so two measurements in a row must agree.
+    float x = panel.TransformToVisual(content).TransformPoint({0, 0}).X;
+    float center0 = center - (x + p.baseLeft + p.baseWidth / 2);  // left of the middle
+    float right = x + p.baseLeft + p.baseWidth;
+    float trayFrame = TrayRoomFor(root, false);
+    bool nearTray = right > screen - trayFrame - 3 * g_size.buttonWidth;
+    if (!nearTray || g_naturalOffset.screen != screen) {
+        g_naturalOffset = {screen, nearTray ? 0 : center0};
+    }
+    float off = center0 - g_naturalOffset.off;
+    bool settled = std::fabs(center0 - p.lastCenter0) < 0.5f &&
+                   std::fabs(p.baseWidth - p.lastWidth) < 0.5f;
+    p.lastCenter0 = center0;
+    p.lastWidth = p.baseWidth;
+    p.unsettled = settled ? 0 : p.unsettled + 1;
+    if (!settled && p.unsettled < 10) MarkPlatesDirty();  // measured again
+    if (settled && TaskbarCentered() && off > kPushedBy && nearTray) {
+        // The unmagnified right end that's allowed, and where Windows stopped it.
+        float allowed = screen - trayRoom() - gap - GrowthRoom(g_size, items) / 2;
+        float more = allowed - right + 2;
+        if (more > 0) {
+            g_windowsRoom.extra += more;
+            Wh_Log(L"Windows moved the dock %.0f px left, near the tray: it keeps %.0f px more "
+                   L"room there than the tray takes",
+                   off, g_windowsRoom.extra);
+        }
+    }
+
+    float tray = trayRoom();
+    float room = 2 * std::min(center - gap, screen - tray - gap - center);
+    // What the sum misses, as wider buttons (Windows' search box) and rounding.
+    float extra = p.baseWidth - DockWidthFor(g_size, icons.size(), dividers, trash);
+    auto need = [&](float icon) {
+        Sizes z = SizesFor(icon);
+        return DockWidthFor(z, icons.size(), dividers, trash) + extra + GrowthRoom(z, items);
+    };
+    float current = g_size.icon, fit = kMinFitIcon;
+    for (float icon = g_fullIcon; icon >= kMinFitIcon; icon--) {
+        if (need(icon) + (icon > current ? kFitHysteresis : 0) <= room) {
+            fit = icon;
+            break;
+        }
+    }
+    p.fitIcon = fit;
+
+    // [fit] logging, to be removed: once per change.
+    wchar_t line[400];
+    swprintf_s(line,
+               L"[fit] %zu icons%s, screen %.0f, tray %s %.0f (its frame %.0f, Windows keeps "
+               L"%.0f more), room %.0f; dock %.0f at %.0f px (extra %.0f), magnified up to "
+               L"%.0f more, needs %.0f; %.0f left of the middle (usually %.0f), right end "
+               L"%.0f%s%s; fits %.0f px",
+               icons.size(), trash ? L" and the bin" : L"", screen,
+               g_settings.tray == Show::Hidden ? L"hidden," : L"", tray, trayFrame,
+               g_windowsRoom.extra, room, p.baseWidth, current, extra,
+               GrowthRoom(g_size, items), need(current), center0, g_naturalOffset.off, right,
+               nearTray ? L" (near the tray)" : L"", settled ? L"" : L" (still moving)", fit);
+    if (g_fitLogged != line) {
+        g_fitLogged = line;
+        Wh_Log(L"%s", line);
+    }
+}
+
 // Re-measures the plate around the icons, as if nothing were magnified.
 void MeasurePlate(Plate& p) {
     auto row = p.row.get();
@@ -5918,6 +6231,7 @@ void MeasurePlate(Plate& p) {
     auto icons = GetIcons(row);
     if (icons.size() != p.iconCount) {
         if (p.iconCount) NoteIconsMoving();  // an app opened or closed
+        if (p.iconCount) g_slideLogSince = GetTickCount64();  // [slide] logging, to be removed
         p.iconCount = icons.size();
     }
     if (icons.empty()) {
@@ -5953,9 +6267,11 @@ void MeasurePlate(Plate& p) {
 
     auto& root = p.surface.root;
     double current = root.Height();  // NaN when new
-    if (std::isnan(current) || std::fabs(current - height) > 0.5) root.Height(height);
-    p.left = p.width = -1;  // ApplyPlate writes again
-    root.Visibility(Visibility::Visible);
+    if (std::isnan(current) || std::fabs(current - height) > 0.5) {
+        root.Height(height);
+        p.left = p.width = -1;  // ApplyPlate shapes it again
+    }
+    if (root.Visibility() != Visibility::Visible) root.Visibility(Visibility::Visible);
 
     auto layout = LayOutButtons(p, icons);
     auto iconOf = [&](wux::FrameworkElement const& el) -> Icon const& {
@@ -5968,10 +6284,13 @@ void MeasurePlate(Plate& p) {
     auto placeDivider = [&](wuxc::Border const& divider, Icon const& icon, float offset) {
         float x = origin.X + icon.left + icon.width + g_size.buttonMargin + offset;
         divider.Margin({x - kDividerWidth / 2, p.top + DividerInset(), 0, 0});
-        divider.Visibility(Visibility::Visible);
+        double dividerHeight = std::max(1.0f, g_size.dockHeight - 2 * DividerInset());
+        if (divider.Height() != dividerHeight) divider.Height(dividerHeight);  // shrunk to fit
+        if (divider.Visibility() != Visibility::Visible) divider.Visibility(Visibility::Visible);
     };
 
     if (p.trash) {
+        SizeTrash(p);  // the dock may have shrunk to fit, or grown back
         auto& last = iconOf(layout.last);
         float size = g_size.icon * TrashIconScale();
         p.trashCenter = last.left + last.width + g_size.buttonMargin + TrashDividerSpace() +
@@ -5986,27 +6305,99 @@ void MeasurePlate(Plate& p) {
         UpdateTrashIcons();
     }
 
+    // Whatever layout moved slides there (see Sliding), apps moving aside for
+    // one that's dragged too (but not that one: see FollowsPointer). As one
+    // goes (fewer icons, or the dock narrowing at the same icon size), after
+    // its icon's left.
+    float now = NowMs();
+    bool closing = p.measured && !g_dragging &&
+                   (icons.size() < p.layoutCount ||
+                    (icons.size() == p.layoutCount && g_size.icon == p.lastIcon &&
+                     p.baseWidth < p.lastRight - p.lastLeft - 0.25f));
+    if (closing && g_closeHoldUntil <= now) g_closeHoldUntil = now + kCloseHoldMs;
+    float begin = closing ? g_closeHoldUntil : now;
+
     MatchDividerCount(p, panel, row, layout.beforeDividers.size());
     for (size_t i = 0; i < p.dividers.size(); i++) {
         auto& d = p.dividers[i];
         auto before = layout.beforeDividers[i];
         if (d.after.get() != before) d.after = winrt::make_weak(before);
         placeDivider(d.element, iconOf(before), g_size.dividerLeft);
+        float x = (float)d.element.Margin().Left;
+        if (!std::isnan(d.x) && std::fabs(x - d.x) > 0.25f) {
+            d.slide.Moved(x - d.x, now, begin);
+            SetDividerShift(d, d.magnified);
+        }
+        d.x = x;
     }
 
     p.offsetY = offsetY;
     p.originX = origin.X;
     p.originY = origin.Y;
+    // [slide] logging, to be removed: for a second after the icons change.
+    if (ULONGLONG since = GetTickCount64() - g_slideLogSince; since < 1000) {
+        float narrowest = 1e6f, widest = 0;
+        for (auto& icon : icons) {
+            narrowest = std::min(narrowest, icon.width);
+            widest = std::max(widest, icon.width);
+        }
+        Wh_Log(L"[slide] +%llu ms%s: %zu icons (%.1f to %.1f wide, %.1f expected), dock %.1f "
+               L"to %.1f (%.1f wide), first icon at %.1f",
+               since, g_inLayoutMeasure ? L" after layout" : L"", icons.size(), narrowest,
+               widest, g_size.buttonWidth, p.baseLeft, p.baseLeft + p.baseWidth, p.baseWidth,
+               origin.X + minLeft);
+    }
+    for (auto& icon : icons) {
+        Button* b = FindButton(icon.element);
+        if (!b) continue;
+        float center = origin.X + icon.left + icon.width / 2;
+        if (!std::isnan(b->layoutCenter) && std::fabs(center - b->layoutCenter) > 0.25f) {
+            bool follows = FollowsPointer(icon.element);
+            if (!follows) b->slide.Moved(center - b->layoutCenter, now, begin);
+            if (g_dragging || follows) {  // [slide] logging, to be removed
+                Wh_Log(L"[slide] %s %s moved %.1f%s", g_dragging ? L"dragging:" : L"dropped:",
+                       follows ? L"the dragged app" : L"an app", center - b->layoutCenter,
+                       follows ? L" (not slid)" : L"");
+            }
+        }
+        b->layoutCenter = center;
+        b->rowCenter = icon.left + icon.width / 2;
+    }
+    float left = p.baseLeft, right = p.baseLeft + p.baseWidth, trashX = origin.X + p.trashCenter;
+    if (p.measured) {
+        if (std::fabs(left - p.lastLeft) > 0.25f) {
+            p.slideLeft.Moved(left - p.lastLeft, now, begin);
+        }
+        if (std::fabs(right - p.lastRight) > 0.25f) {
+            p.slideRight.Moved(right - p.lastRight, now, begin);
+        }
+        if (p.trash && std::fabs(trashX - p.lastTrash) > 0.25f) {
+            p.slideTrash.Moved(trashX - p.lastTrash, now, begin);
+            SetTrashScale(p, p.trashScale, p.trashShift, p.trashGapShift);
+        }
+    }
+    p.measured = true;
+    p.lastIcon = g_size.icon;
+    p.layoutCount = icons.size();
+    p.lastLeft = left;
+    p.lastRight = right;
+    p.lastTrash = trashX;
     for (auto& icon : icons) ReapplyButton(icon.element);
     HideStrayDots(panel, icons);
+    Try([&] { FitPlate(p, icons, layout.beforeDividers.size()); }, L"Fitting");
 }
 
 // Positions the plate, widened by `extra` in all, `extraLeft` of it leftward.
 void ApplyPlate(Plate& p, float extraLeft, float extra) {
     auto& root = p.surface.root;
     if (!root) return;
-    float left = p.baseLeft - extraLeft;
-    float width = p.baseWidth + extra;
+    p.appliedExtraLeft = extraLeft;
+    p.appliedExtra = extra;
+    float now = NowMs();
+    p.slideLeft.applied = p.slideLeft.At(now);
+    p.slideRight.applied = p.slideRight.At(now);
+    float left = p.baseLeft + p.slideLeft.applied - extraLeft;
+    float width = p.baseWidth + p.slideRight.applied - p.slideLeft.applied + extra;
     if (std::fabs(left - p.left) > 0.25f || std::fabs(width - p.width) > 0.25f) {
         root.Margin({left, p.top, 0, 0});
         root.Width(width);
@@ -6014,6 +6405,53 @@ void ApplyPlate(Plate& p, float extraLeft, float extra) {
         p.width = width;
         ShapePlate(p);
     }
+}
+
+// While the buttons are changing (apps opening and closing, the dock shrinking
+// to fit), the plates are measured again once XAML's laid them out, where
+// they really are for this frame: the taskbar centers its buttons in a second
+// layout pass, after the frame loop has measured them. What's changed is laid
+// out again before the frame's drawn. A few times a frame at most, so changes
+// that lead to more layout can't go round forever.
+extern int g_platesDirtyFrames;
+int g_frameNumber = 0;
+int g_layoutMeasuresFrame = -1, g_layoutMeasures = 0;
+
+void MeasureAfterLayout() {
+    // Not while the frame loop's measuring them (UpdateLayout lays them out).
+    if (g_unloading || g_inLayoutMeasure || g_measuringPlates || !g_plates) return;
+    if (g_layoutMeasuresFrame != g_frameNumber) {
+        g_layoutMeasuresFrame = g_frameNumber;
+        g_layoutMeasures = 0;
+    }
+    if (g_layoutMeasures >= 3) return;
+    g_inLayoutMeasure = true;
+    g_measuringPlates = true;
+    bool any = false;
+    for (auto& p : *g_plates) {
+        // Measured again while they're changing, or as soon as layout's moved
+        // any icon: an app opening or closing doesn't change the row's size
+        // (it spans the taskbar), so nothing else says so before it's drawn,
+        // and its icons would be drawn in their new places a frame before they
+        // started sliding there.
+        if (g_platesDirtyFrames <= 0) {
+            auto row = p.row.get();
+            if (!row || !p.measured) continue;
+            auto icons = GetIcons(row);
+            if (icons.size() == p.layoutCount && !IconsMoved(icons)) continue;
+            MarkPlatesDirty();  // and again over the next frames
+        }
+        any = true;
+        float left = p.baseLeft, width = p.baseWidth;
+        Try([&] { MeasurePlate(p); }, L"MeasurePlate");
+        if (p.baseLeft != left || p.baseWidth != width) {
+            p.left = p.width = -1;  // where it is now, this frame
+            ApplyPlate(p, p.appliedExtraLeft, p.appliedExtra);
+        }
+    }
+    if (any) g_layoutMeasures++;
+    g_measuringPlates = false;
+    g_inLayoutMeasure = false;
 }
 
 void EnsurePlate(wux::FrameworkElement const& button) {
@@ -6037,6 +6475,10 @@ void EnsurePlate(wux::FrameworkElement const& button) {
     };
     p.rowSizeChanged = row.SizeChanged(winrt::auto_revoke, onSize);
     p.panelSizeChanged = panel.SizeChanged(winrt::auto_revoke, onSize);
+    p.panelLayoutUpdated = panel.LayoutUpdated(
+        winrt::auto_revoke, [](wf::IInspectable const&, wf::IInspectable const&) {
+            Try(MeasureAfterLayout, L"MeasureAfterLayout");
+        });
     p.panelThemeChanged = panel.ActualThemeChanged(
         winrt::auto_revoke, [](wux::FrameworkElement const&, wf::IInspectable const&) {
             for (auto& plate : *g_plates) Try([&] { ApplyPlateLook(plate); });
@@ -8771,6 +9213,7 @@ int g_platesDirtyFrames = 0;  // frames left in which to re-measure the plates
 
 void ScanTaskbars();
 bool FollowPointerUnderTrashMenu();
+void UpdateDockFit();
 
 void StopFrames() {
     if (!g_frameRunning) return;
@@ -8810,13 +9253,21 @@ void RefreshPlates() {
         if (auto el = b.element.get()) Try([&] { EnsurePlate(el); }, L"EnsurePlate");
     }
     g_measuringPlates = true;
-    for (auto& p : *g_plates) Try([&] { MeasurePlate(p); }, L"MeasurePlate");
+    for (auto& p : *g_plates) {
+        // Laid out first: this runs as a frame starts, before XAML lays out
+        // what's changed, so as an app opens or closes the buttons would be
+        // measured where they were, and the dock drawn a frame out of step.
+        if (auto panel = p.panel.get()) Try([&] { panel.UpdateLayout(); }, L"Layout");
+        Try([&] { MeasurePlate(p); }, L"MeasurePlate");
+    }
     EnsureStartIcons();
     g_measuringPlates = false;
     ScheduleOverWindows(false);  // the taskbar may have changed size
+    Try(UpdateDockFit, L"Fitting");
 }
 
 void OnFrame() {
+    g_frameNumber++;
     CheckDragging();
     auto now = std::chrono::steady_clock::now();
     float dt = std::min(std::chrono::duration<float>(now - g_lastFrame).count(), 0.1f);
@@ -8925,6 +9376,30 @@ void OnFrame() {
         ApplyPlate(p, current ? growLeft : 0, current ? total : 0);
     }
 
+    // ---- 3b. Slides: everything Windows moved eases to its new place ----
+    float slideNow = NowMs();
+    for (auto& b : *g_buttons) {
+        if (!b.slide.Pending(slideNow)) continue;
+        settled = false;
+        if (auto el = b.element.get()) ReapplyButton(el);
+    }
+    for (auto& p : *g_plates) {
+        if (p.slideLeft.Pending(slideNow) || p.slideRight.Pending(slideNow)) {
+            settled = false;
+            p.left = -1;  // drawn again where the slide's got to
+            ApplyPlate(p, p.appliedExtraLeft, p.appliedExtra);
+        }
+        if (p.trash && p.slideTrash.Pending(slideNow)) {
+            settled = false;
+            SetTrashScale(p, p.trashScale, p.trashShift, p.trashGapShift);
+        }
+        for (auto& d : p.dividers) {
+            if (!d.slide.Pending(slideNow)) continue;
+            settled = false;
+            SetDividerShift(d, d.magnified);
+        }
+    }
+
     // ---- 4. Auto-hide: the whole panel slides down ----
     float shownTarget = DockHidden() ? 0.0f : 1.0f;
     if (g_dockShown != shownTarget) {
@@ -8966,7 +9441,7 @@ constexpr int kTraySlideOutMs = 320;
 // to its tray's width (see TaskbarRegion), and a stale width cuts the tray off.
 struct TrayFrame {
     winrt::weak_ref<wux::FrameworkElement> element;
-    bool hidden = false;        // collapsed for Hidden
+    bool hidden = false;        // given no width, for Hidden
     bool corner = false;        // set up for its hot corner
     bool cornerHidden = false;  // slid out of view
     int width = 0;              // in pixels, as last measured
@@ -9093,12 +9568,19 @@ void ApplyTrayVisibility(wux::FrameworkElement const& el, TrayFrame& t) {
     auto show = g_settings.tray;
     auto hitTest = wux::UIElement::IsHitTestVisibleProperty();
 
+    // Hidden for good, it's given no width rather than collapsed: collapsed,
+    // it keeps its last width, and Windows keeps that much room for it, which
+    // the dock should have.
     if (show == Show::Hidden) {
         t.hidden = true;
-        if (el.Visibility() != Visibility::Collapsed) el.Visibility(Visibility::Collapsed);
+        if (el.Width() != 0) el.Width(0);
+        if (el.Opacity() != 0) el.Opacity(0);
+        if (el.IsHitTestVisible()) el.IsHitTestVisible(false);
     } else if (t.hidden) {
         t.hidden = false;
-        PutBack(el, wux::UIElement::VisibilityProperty());
+        PutBack(el, wux::FrameworkElement::WidthProperty());
+        PutBack(el, wux::UIElement::OpacityProperty());
+        PutBack(el, hitTest);
     }
 
     if (show == Show::HotCorner) {
@@ -9155,6 +9637,8 @@ void FixTrayFrame(wux::FrameworkElement const& el) {
             });
         Track(el, wux::UIElement::VisibilityProperty(), ApplyTrayFrame);
         Track(el, wux::UIElement::IsHitTestVisibleProperty());
+        Track(el, wux::FrameworkElement::WidthProperty(), ApplyTrayFrame);
+        Track(el, wux::UIElement::OpacityProperty(), ApplyTrayFrame);
     }
     ApplyTrayFrame(el);
 }
@@ -9463,6 +9947,95 @@ void ReleaseStillIcons() {
     g_stillIcons->clear();
 }
 
+// ---- Windows' own slide ----
+// Windows animates each button to its new place itself, which the dock can't
+// see, so the dock's slide (see Sliding) would move it twice. While the mod's
+// loaded and sliding, Windows' is taken off: an implicit animation of the
+// button's visual's Offset, or a RepositionThemeTransition among its
+// Transitions. Its other animations (appearing, the launch bounce) stay.
+
+struct TakenSlide {
+    winrt::weak_ref<wux::FrameworkElement> button;
+    wuc::ImplicitAnimationCollection original{nullptr};  // put back on unloading
+};
+[[clang::no_destroy]] std::optional<std::list<TakenSlide>> g_takenSlides{std::in_place};
+bool g_loggedButtonAnimations = false;  // [slide] logging, to be removed
+
+void TakeWindowsSlide(wux::FrameworkElement const& button) {
+    if (SlideMs() <= 0 || !g_takenSlides) return;  // the dock doesn't slide: Windows' stays
+    auto visual = wuxh::ElementCompositionPreview::GetElementVisual(button);
+    auto implicit = visual.ImplicitAnimations();
+    auto transitions = button.Transitions();
+
+    if (!g_loggedButtonAnimations) {  // [slide] logging, to be removed
+        g_loggedButtonAnimations = true;
+        auto describe = [](wux::UIElement const& el, PCWSTR what) {
+            if (!el) return;
+            std::wstring keys, kinds;
+            auto v = wuxh::ElementCompositionPreview::GetElementVisual(el);
+            if (auto i = v.ImplicitAnimations()) {
+                for (auto const& pair : i) keys += std::wstring(pair.Key()) + L" ";
+            }
+            if (auto t = el.Transitions()) {
+                for (auto const& x : t) kinds += std::wstring(winrt::get_class_name(x)) + L" ";
+            }
+            std::wstring children;
+            if (auto panel = el.try_as<wuxc::Panel>()) {
+                if (auto t = panel.ChildrenTransitions()) {
+                    for (auto const& x : t) children += std::wstring(winrt::get_class_name(x)) + L" ";
+                }
+            }
+            Wh_Log(L"[slide] Windows' animations on %s (%s): implicit [ %s], transitions [ %s], "
+                   L"children's transitions [ %s]",
+                   what, winrt::get_class_name(el).c_str(), keys.c_str(), kinds.c_str(),
+                   children.c_str());
+        };
+        describe(button, L"a button");
+        if (wuxm::VisualTreeHelper::GetChildrenCount(button) > 0) {
+            describe(wuxm::VisualTreeHelper::GetChild(button, 0).try_as<wux::UIElement>(),
+                     L"its template's root");
+        }
+        describe(wuxm::VisualTreeHelper::GetParent(button).try_as<wux::UIElement>(),
+                 L"the icons' row");
+    }
+
+    if (implicit && implicit.HasKey(L"Offset")) {
+        bool known = false;
+        for (auto& t : *g_takenSlides) known = known || t.button.get() == button;
+        if (!known) g_takenSlides->push_back({winrt::make_weak(button), implicit});
+        auto without = visual.Compositor().CreateImplicitAnimationCollection();
+        for (auto const& pair : implicit) {
+            if (pair.Key() != L"Offset") without.Insert(pair.Key(), pair.Value());
+        }
+        visual.ImplicitAnimations(without);
+    }
+
+    if (transitions) {
+        bool reposition = false;
+        for (auto const& t : transitions) {
+            reposition = reposition || t.try_as<wuxma::RepositionThemeTransition>();
+        }
+        if (reposition) {
+            Track(button, wux::UIElement::TransitionsProperty());  // put back on unloading
+            wuxma::TransitionCollection without;
+            for (auto const& t : transitions) {
+                if (!t.try_as<wuxma::RepositionThemeTransition>()) without.Append(t);
+            }
+            button.Transitions(without);
+        }
+    }
+}
+
+void GiveBackWindowsSlides() {
+    if (!g_takenSlides) return;
+    for (auto& t : *g_takenSlides) {
+        if (auto button = t.button.get()) Try([&] {
+            wuxh::ElementCompositionPreview::GetElementVisual(button).ImplicitAnimations(t.original);
+        });
+    }
+    g_takenSlides.reset();
+}
+
 // Everything the mod changes in one button. Safe to call again.
 void ProcessButton(wux::FrameworkElement const& button) {
     UpdateStartHidden(button);
@@ -9472,6 +10045,7 @@ void ProcessButton(wux::FrameworkElement const& button) {
     ApplyHitClip(button);
     ApplyIconColumn(b);
     HideStockToolTip(button);
+    Try([&] { TakeWindowsSlide(button); }, L"Windows' slide");
     ForEachDescendant(button, 6, [&](wux::FrameworkElement const& el) {
         auto name = el.Name();
         if (name == L"Icon") {
@@ -9763,6 +10337,63 @@ void ApplyTrayLook(TrayDecor& t) {
 void ApplyTrayLooks() {
     if (!g_trayDecor) return;
     for (auto& t : *g_trayDecor) Try([&] { ApplyTrayLook(t); }, L"Tray background");
+}
+
+// The room the tray takes at the right of the taskbar showing `root`: what
+// Windows lays out for it, or, with `background`, its background and that's
+// gap from the screen's edge, if more. None without a tray.
+float TrayRoomFor(wux::XamlRoot const& root, bool background) {
+    float room = 0;
+    for (auto& t : *g_trayDecor) {
+        auto frame = t.frame.get();
+        if (!frame || frame.XamlRoot() != root) continue;
+        float width = (float)frame.ActualWidth();
+        if (background && t.surfaceRect.Width > 0) {
+            width = std::max(width, t.surfaceRect.Width + kTrayPlateInsetX);
+        }
+        room = std::max(room, width);
+    }
+    return room;
+}
+
+// The dock at the largest size every taskbar has room for (see FITTING).
+void UpdateDockFit() {
+    if (!g_plates || g_unloading || g_dragging) return;
+    float fit = g_fullIcon;
+    bool measured = false;
+    for (auto& p : *g_plates) {
+        if (p.fitIcon <= 0) continue;
+        fit = std::min(fit, p.fitIcon);
+        measured = true;
+    }
+    if (!measured) return;
+    float want = fit < g_fullIcon ? fit : 0;
+    if (want == g_fitIcon) return;
+    // Bigger only once an app that's closed has gone, and the gap's closed:
+    // its icons growing as it slides away would look wrong.
+    float shown = g_fitIcon > 0 ? g_fitIcon : g_fullIcon;
+    if (fit > shown && NowMs() < g_closeHoldUntil + SlideMs()) {
+        MarkPlatesDirty();  // looked at again next frame
+        return;
+    }
+    g_fitIcon = want;
+    ComputeSizes();
+    if (want) Wh_Log(L"The dock shrinks to fit: icons %.0f px, of %.0f", want, g_fullIcon);
+    else Wh_Log(L"The dock fits at full size again");
+
+    // Changed in place, not taken down and built again as saving the settings
+    // does, so nothing flickers: the buttons, the bin and dividers resize, and
+    // the plates are measured and shaped again (see MeasurePlate).
+    Try(RemoveStartIcons);
+    g_finderIconSource.reset();  // drawn again at the new size
+    g_appIconSources.clear();
+    SettleIconsAgain();
+    Try(ReleaseStillIcons);
+    for (auto& b : *g_buttons) {
+        if (auto el = b.element.get()) Try([&] { ProcessButton(el); });
+    }
+    MarkPlatesDirty();
+    ApplyTrayLooks();  // its glows are sized by the dock's height
 }
 
 // ---- Opening the tray's menus ----
@@ -10356,9 +10987,11 @@ void ResetAll() {
     Try(RemovePlates);
     g_d2d = nullptr;
     Try(StopTrash);
+    Try(GiveBackWindowsSlides);
     for (auto& b : *g_buttons) {
         auto el = b.element.get();
         if (!el) continue;
+        b.slide = {};
         Try([&] {
             ReleaseButton(b);
             SetScale(el, 1.0f);
@@ -11704,6 +12337,28 @@ std::wstring UserValueName(PCWSTR name) {
     return std::wstring(name) + L"_" + sid;
 }
 
+// How far up from the screen's bottom edge the taskbar shows, in pixels at
+// 100%: the dock, or the tray if it's ever shown. The tray's menus open just
+// above it (see Menus::AboveTaskbarTop). Quick Settings is placed in its own
+// process, which reads it from what's saved here.
+constexpr PCWSTR kTaskbarTopValue = L"taskbarTop";
+
+double TrayRowSpan();
+
+int TaskbarTop() {
+    double top = std::max<double>(g_size.bottomGap + g_size.dockHeight, kStockTaskbarHeight);
+    if (g_settings.tray != Show::Hidden) top = std::max(top, TrayRowSpan());
+    return (int)std::ceil(top);
+}
+
+void SaveTaskbarTop() {
+    static int saved = -1;
+    int value = TaskbarTop();
+    if (value == saved) return;
+    saved = value;
+    Wh_SetIntValue(UserValueName(kTaskbarTopValue).c_str(), value);
+}
+
 using TrayUI__Hide_t = void(WINAPI*)(void* pThis);
 TrayUI__Hide_t TrayUI__Hide_Original;
 using CSecondaryTray__AutoHide_t = void(WINAPI*)(void* pThis, bool param1);
@@ -12208,8 +12863,8 @@ HMODULE WINAPI LoadLibraryExW_Hook(LPCWSTR name, HANDLE file, DWORD flags) {
 // START AND TRAY MENUS
 // =============================================================================
 // Start opens in the middle of the screen, fading in as it grows, and the
-// tray's menus (Quick Settings and the Notification Center) at the middle of
-// its right edge, sliding in from there. None of them has a drop shadow. Each
+// tray's menus at its right edge just above the taskbar, sliding in from
+// there. None of them has a drop shadow. Each
 // is shown by another process, which the mod also loads into, doing only this
 // there:
 //
@@ -12220,7 +12875,8 @@ HMODULE WINAPI LoadLibraryExW_Hook(LPCWSTR name, HANDLE file, DWORD flags) {
 //   by Explorer to Start's spot, and, in SearchHost.exe, told Windows'
 //   animations are off too.
 // - Quick Settings (ShellHost.exe, or ShellExperienceHost.exe before 24H2):
-//   its window is subclassed, and placed whenever it's moved.
+//   its window is subclassed, and placed whenever it's moved, above how tall
+//   Explorer's side of the mod saved the taskbar shows.
 // - None of them has a drop shadow: Start's shadow borders are collapsed, and
 //   the tray menus' panels cast none.
 // - The Notification Center (ShellExperienceHost.exe) is placed by Explorer,
@@ -12295,6 +12951,29 @@ LONG ScreenMiddleTop(HMONITOR monitor, LONG top, LONG bottom) {
     RECT const& m = info.rcMonitor;
     LONG y = ((m.top + m.bottom) - (top + bottom)) / 2;
     return std::clamp(y, m.top - top, std::max(m.top - top, m.bottom - bottom));
+}
+
+// Where a window's top goes to put the part of it that shows, from `top` to
+// `bottom` in the window, just above the taskbar, as far above it as Windows
+// has its flyouts (kFlyoutStockGap), or as high as fits. Explorer knows how
+// tall the taskbar shows; elsewhere it's read from what Explorer saved
+// (SaveTaskbarTop). Without that, it's centered.
+LONG AboveTaskbarTop(HMONITOR monitor, LONG top, LONG bottom) {
+    int taskbar = g_host == Host::Explorer
+                      ? ::TaskbarTop()
+                      : Wh_GetIntValue(UserValueName(kTaskbarTopValue).c_str(), 0);
+    static std::atomic<int> logged = -1;  // [menus] logging, to be removed
+    if (logged.exchange(taskbar) != taskbar) {
+        Wh_Log(L"[menus] taskbar shows %d px up%s", taskbar, taskbar > 0 ? L"" : L": centered");
+    }
+    if (taskbar <= 0) return ScreenMiddleTop(monitor, top, bottom);
+    MONITORINFO info{.cbSize = sizeof(info)};
+    GetMonitorInfo(monitor, &info);
+    RECT const& m = info.rcMonitor;
+    UINT dpiX = 96, dpiY = 96;
+    if (FAILED(GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY))) dpiY = 96;
+    LONG above = MulDiv(taskbar + (int)kFlyoutStockGap, dpiY, 96);
+    return std::max(m.bottom - above - bottom, m.top - top);
 }
 
 template <typename F>
@@ -12813,12 +13492,12 @@ RECT ShownPart(HWND w, int cx, int cy) {
 }
 
 // Where Quick Settings' window's top goes. Its window is as tall as the
-// screen, and only its region, the panel, shows: that's centered on the
-// screen. Windows already has it at the right edge, sliding in from there.
+// screen, and only its region, the panel, shows: that's just above the
+// taskbar. Windows already has it at the right edge, sliding in from there.
 LONG QuickSettingsTop(HWND w, int x, int y, int cx, int cy) {
     RECT rect{x, y, x + cx, y + cy};
     RECT shown = ShownPart(w, cx, cy);
-    return ScreenMiddleTop(MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST), shown.top,
+    return AboveTaskbarTop(MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST), shown.top,
                            shown.bottom);
 }
 
@@ -13179,9 +13858,9 @@ void PlaceSearch(HWND w) {
            {m.left + (m.right - m.left - cx) / 2, m.top + (m.bottom - m.top - cy) / 2});
 }
 
-// The Notification Center's visible part, its region, is centered top to
-// bottom. Its window can be taller.
-void CenterNotifications(HWND w, HRGN region) {
+// The Notification Center's visible part, its region, is just above the
+// taskbar. Its window can be taller.
+void PlaceNotifications(HWND w, HRGN region) {
     RECT rect, visible;
     if (!GetWindowRect(w, &rect)) return;
     int kind = region ? GetRgnBox(region, &visible) : ERROR;
@@ -13193,7 +13872,7 @@ void CenterNotifications(HWND w, HRGN region) {
     RECT shown = visible;
     OffsetRect(&shown, rect.left, rect.top);
     HMONITOR monitor = MonitorFromRect(&shown, MONITOR_DEFAULTTONEAREST);
-    LONG top = ScreenMiddleTop(monitor, visible.top, visible.bottom);
+    LONG top = AboveTaskbarTop(monitor, visible.top, visible.bottom);
     MoveTo(g_notifications, w, rect, monitor, {rect.left, top});
 }
 
@@ -13224,7 +13903,7 @@ HRESULT WINAPI DwmSetWindowAttribute_Hook(HWND w, DWORD attribute, LPCVOID value
                     DeleteObject(region);
                     region = nullptr;
                 }
-                CenterNotifications(w, region);
+                PlaceNotifications(w, region);
                 if (region) DeleteObject(region);
             }
             break;
@@ -13261,7 +13940,7 @@ int WINAPI SetWindowRgn_Hook(HWND w, HRGN region, BOOL redraw) {
     if (region && !g_unloading) {
         switch (FlyoutKind(w)) {
             case Flyout::NotificationCenter:
-                if (g_controlTray) CenterNotifications(w, region);
+                if (g_controlTray) PlaceNotifications(w, region);
                 break;
             case Flyout::Start:
                 if (g_controlStart) CenterStartRegion(w, region);
@@ -13523,6 +14202,11 @@ BOOL Wh_ModSettingsChanged(BOOL* reload) {
         LoadSettings();
         RecolorSquircles(old);
         CloseInfoCard();  // what it says may have changed
+        g_windowsRoom = {};  // learned again at the new sizes
+        for (auto& b : *g_buttons) {  // laid out anew: nothing slides from before
+            b.layoutCenter = NAN;
+            b.slide = {};
+        }
         Try(HideLabel);   // redrawn in the new color
         ForgetLabelFont();  // looked for again, in case it's been installed
         // Liquid Glass starts over, at the new sizes, below.
