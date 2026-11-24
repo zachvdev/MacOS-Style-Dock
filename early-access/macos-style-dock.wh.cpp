@@ -2,7 +2,7 @@
 // @id              macos-style-dock
 // @name            MacOS Style Dock
 // @description     Turns the Windows 11 taskbar into a macOS-style dock with magnifying icons
-// @version         1.2.4
+// @version         1.2.5
 // @author          Zach Vaughn
 // @github          https://github.com/zachvdev
 // @include         explorer.exe
@@ -1085,68 +1085,533 @@ using winrt::Windows::UI::Color;
 using wux::Visibility;
 
 // =============================================================================
-// CONTENTS
+// SETTINGS
 // =============================================================================
-// The mod restyles Windows' own taskbar, on the taskbar's thread. Its code is
-// in five parts, each building on the ones before it (the few calls back up
-// are declared under DECLARED AHEAD):
-//
-//   1. FOUNDATION   Utilities, settings, sizes, shell jobs, the mod's window,
-//                   property overrides.
-//   2. DRAWING      Colors, pixels, images, shapes, Direct2D, composition.
-//   3. THE DOCK     Custom icons, the surface and its border, buttons, the
-//                   plate, apps, icon tiles, app icons, Start, the Recycle
-//                   Bin, dragging, indicators, magnification, layout, fitting,
-//                   measuring.
-//   4. BEHAVIOR     Auto-hide, labels, info cards, Liquid Glass, the frame
-//                   loop, the system tray, hot corners, scanning, the pointer,
-//                   reset.
-//   5. WINDOWS      The hooks into the taskbar (its elements, height, icon
-//                   resolution, window previews, Task View, maximized
-//                   windows), the mod window's messages, and installing them.
-//
-// After them, START AND TRAY MENUS runs in Start's, search's and the tray
-// menus' own processes, and WINDHAWK ENTRY POINTS is where Windhawk calls in.
+
+enum class Background { Light, Dark, System, Custom, None };
+enum class Border { Mac, Standard, Custom, None };
+enum class LeftCorner { TaskView, Start, Off };
+enum class Show { HotCorner, Hidden, Visible };  // the system tray
+enum class AutoHide { Hybrid, On, Off };
+// Behind squircle icons' shapes.
+enum class TileColor { AlwaysLight, PreferLight, Auto, PreferDark, AlwaysDark, Custom };
+enum class ShadowDirection { Down, DownLeft, DownRight, Left, Right, Up, Centered };
+enum class CornerStyle { Squircle, Rounded };
+
+// The dock's glow or shadow along one side (see MAC BORDER): as a tile's, but
+// sized by the dock's height, and blank gives a lighter shade of its color.
+struct DockEdge {
+    bool lighter = true;  // a lighter shade of the background color, not `color`
+    uint8_t color[3] = {};
+    int opacity = 0;  // percent
+    int size = 0;     // how far in it reaches, as a percent of the dock's height
+};
+
+// A tile's glow or shadow along one side, fading in from its edge.
+struct TileEdge {
+    uint8_t color[3] = {};
+    int opacity = 0;  // percent
+    int size = 0;     // how far in it reaches, as a percent of the tile
+    bool operator==(TileEdge const&) const = default;
+};
+enum class Indicators { Dots, HybridDots, Windows, None };  // running apps
+enum class GlassStyle { Lens, Reflection, Stretch, Off };  // how Liquid Glass bends the rim
+
+constexpr float kMacIconScale = 1024.0f / 824;  // macOS icons fill 824 of 1024px, for shadows
+constexpr size_t kMaxCustomDividers = 5;
+constexpr int kMaxAppIcons = 100;  // in "App Icons"
+
+// The user's own Finder, Start or Trash icon. None while `path` is empty.
+struct CustomIcon {
+    std::wstring path, fullPath;  // image files; fullPath for a full Recycle Bin
+    float size = 1;               // the artwork, of the icon size
+    float scale = 1;              // the image, of the icon size, margin included
+    float fullSize = 1, fullScale = 1;  // the same for fullPath's image
+    bool ignoreSquircle = false;        // shown as it is, not in a squircle tile
+};
+
+// The user's own icon for an app, in "App Icons".
+struct AppIcon {
+    std::wstring app;  // as typed: its ID, its name, or its .exe
+    bool exe = false;  // `app` is an .exe: a file name, or a full path
+    CustomIcon icon;
+};
+
+// A background like the dock's: the dock's own, or the tray's.
+struct Look {
+    Background background;
+    uint8_t color[3];        // for Custom
+    int opacity;             // 0-100
+    int blur;                // 0-100
+    Border border;
+    int borderOpacity;       // 0-100, for Standard and Custom
+    int borderWidth;         // pixels, for Standard and Custom
+    uint8_t borderColor[3];  // for Custom
+};
+
+struct Settings {
+    int size;
+    int paddingH, paddingV, spacing;
+    float scale;  // magnification, 1.0-2.0
+    int range;
+    int animationMs;
+    AutoHide autoHide;
+    Look dockLook, trayLook;
+    bool trayMatchDock;
+    int dockBrightnessLimit;  // percent; 100 for none (Cap Per-Pixel Brightness off)
+    int trayBrightnessLimit;  // the same, for the tray
+    GlassStyle glassStyle;    // Liquid Glass
+    float glassDepth;         // the bent rim, in pixels at 100% scaling
+    float glassStrength;      // 1 for full strength
+    int glassBlur;            // 0-100, like Look::blur, in its place
+    int trayPadding;          // pixels, past kTrayPlateInsetX and Y
+    bool trayShadow;          // under the tray's text and icons
+    bool trayShadowAuto;      // its color follows the text's
+    uint8_t trayShadowColor[3];
+    float trayShadowOpacity;  // 0-1
+    float trayShadowBlur;     // pixels
+    float trayShadowX, trayShadowY;
+    bool hideStart;
+    bool explorerFirst;
+    bool recycleBin;
+    bool highResIcons;
+    bool tooltips;
+    Indicators indicators;
+    bool previews;
+    bool dividerAfterLeft;    // after Start, Task View and File Explorer
+    bool dividerBeforeTrash;
+    std::vector<int> customDividers;  // after these icons, counted from 1; sorted
+    bool squircleIcons;
+    bool launchBounce;    // an app's icon bounces as it's opened from the dock
+    bool keepIconsStill;  // no bounce as apps open, close, minimize or are restored
+    TileColor tileColor;
+    uint8_t tileCustomColor[3];
+    uint8_t tileLightColor[3], tileDarkColor[3];  // the tiles Light and Dark give
+    int tileVibrance;  // 0-200, 100 for the icons' own colors
+    bool tileSheen;
+    int tileSheenOpacity;  // percent
+    int tileSheenSize;     // how far down it reaches, as a percent of the tile
+    std::array<TileEdge, 4> tileEdges;  // top, bottom, left, right
+    int tileShadowSpread;               // 0-10, how soft
+    int tileShadowDistance;             // 0-10, how far it falls
+    int tileShadowOpacity;              // percent
+    ShadowDirection tileShadowDirection;
+    CornerStyle tileCorner;
+    int tileCornerRadius;  // percent of the tile
+    CustomIcon customFinder, customStart, customTrash;
+    std::vector<AppIcon> appIcons;
+    LeftCorner leftCorner;
+    Show tray;
+    std::array<DockEdge, 4> dockEdges;  // top, bottom, left, right
+    uint8_t tooltipColor[3];
+    bool tooltipColorAuto;     // none set: light on a light dock, dark on a dark one
+    std::wstring tooltipFont;  // as typed; empty for Segoe UI
+    int tooltipFontSize;       // 8-32, in view pixels
+    int tooltipRadius;         // 0-50, percent of the tooltip's height
+    bool tooltipTail;
+    // Top, bottom, left, right, as tiles' but sized by the tooltip's height.
+    std::array<TileEdge, 4> tooltipEdges;
+} g_settings;
+int g_settingsVersion = 0;  // counts loads, for what's measured once per look
+
+// The tray's background: its own, or the dock's.
+Look const& TrayLook() {
+    return g_settings.trayMatchDock ? g_settings.dockLook : g_settings.trayLook;
+}
+
+// Reads 6 hex digits ("#333333"), ignoring '#' and spaces.
+bool ParseHexColor(std::wstring_view text, uint8_t rgb[3]) {
+    std::wstring digits;
+    for (wchar_t c : text) {
+        if (c == L'#' || iswspace(c)) continue;
+        if (!iswxdigit(c)) return false;
+        digits.push_back(c);
+    }
+    if (digits.size() != 6) return false;
+    for (int i = 0; i < 3; i++) {
+        rgb[i] = (uint8_t)std::wcstoul(digits.substr(i * 2, 2).c_str(), nullptr, 16);
+    }
+    return true;
+}
+
+// The index of a string setting's value among `options`, or `fallback`.
+int ChoiceSetting(PCWSTR name, std::initializer_list<PCWSTR> options, int fallback) {
+    auto value = WindhawkUtils::StringSetting::make(name);
+    int i = 0;
+    for (PCWSTR option : options) {
+        if (!wcscmp(value, option)) return i;
+        i++;
+    }
+    return fallback;
+}
+
+// A string setting without the spaces and quotes around it, as when copied.
+std::wstring TrimmedSetting(PCWSTR name) {
+    auto value = WindhawkUtils::StringSetting::make(name);
+    std::wstring_view text = value ? (PCWSTR)value : L"";
+    auto trimmed = [](wchar_t c) { return iswspace(c) || c == L'"'; };
+    while (!text.empty() && trimmed(text.front())) text.remove_prefix(1);
+    while (!text.empty() && trimmed(text.back())) text.remove_suffix(1);
+    return std::wstring(text);
+}
+
+bool EndsWithNoCase(std::wstring_view text, std::wstring_view end) {
+    return text.size() >= end.size() &&
+           !_wcsnicmp(text.data() + text.size() - end.size(), end.data(), end.size());
+}
+
+// %VARIABLES% in `text` filled in.
+std::wstring ExpandVariables(std::wstring const& text) {
+    std::wstring path(ExpandEnvironmentStringsW(text.c_str(), nullptr, 0), L'\0');
+    DWORD length = ExpandEnvironmentStringsW(text.c_str(), path.data(), (DWORD)path.size());
+    return length && length <= path.size() ? path.substr(0, length - 1) : text;
+}
+
+// A file's path from a string setting, as typed or copied: surrounding quotes
+// and %VARIABLES% are fine. Empty if there's no file there.
+std::wstring PathSetting(PCWSTR name) {
+    std::wstring text = TrimmedSetting(name);
+    if (text.empty()) return {};
+    std::wstring path = ExpandVariables(text);
+    DWORD attributes = GetFileAttributesW(path.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        Wh_Log(L"No file at %s", path.c_str());
+        return {};
+    }
+    return path;
+}
+
+// A hex color setting into `rgb`. False, leaving `rgb` alone, if it isn't one.
+bool HexSetting(PCWSTR name, uint8_t rgb[3]) {
+    auto value = WindhawkUtils::StringSetting::make(name);
+    PCWSTR text = value ? (PCWSTR)value : L"";
+    if (ParseHexColor(text, rgb)) return true;
+    if (*text) Wh_Log(L"%s \"%s\" isn't 6 hex digits", name, text);
+    return false;
+}
+
+// An icon's margin setting, -50 to 50: how much smaller (or, below 0, bigger)
+// than other icons its artwork is, in percent. At 0, a macOS icon's artwork
+// (824 of 1024 pixels, the rest left for its shadow) matches app icons.
+void ApplyMargin(PCWSTR name, float& size, float& scale) {
+    size = (100 - std::clamp(Wh_GetIntSetting(name), -50, 50)) / 100.0f;
+    scale = size * kMacIconScale;
+}
+
+CustomIcon CustomIconSetting(PCWSTR path, PCWSTR margin, PCWSTR fullPath = nullptr,
+                             PCWSTR fullMargin = nullptr) {
+    CustomIcon icon;
+    icon.path = PathSetting(path);
+    ApplyMargin(margin, icon.size, icon.scale);
+    icon.fullSize = icon.size;
+    icon.fullScale = icon.scale;
+    if (fullPath) icon.fullPath = PathSetting(fullPath);
+    if (!icon.fullPath.empty()) ApplyMargin(fullMargin, icon.fullSize, icon.fullScale);
+    return icon;
+}
+
+// A Look from the settings in `group`: dockColor or trayColor.
+Look LookSetting(std::wstring const& group) {
+    auto name = [&](PCWSTR key) { return group + L"." + key; };
+    auto percent = [&](PCWSTR key) {
+        return std::clamp(Wh_GetIntSetting(name(key).c_str()), 0, 100);
+    };
+    Look look{};
+    look.background = (Background)ChoiceSetting(
+        name(L"background").c_str(), {L"light", L"dark", L"system", L"custom", L"none"}, 0);
+    if (look.background == Background::Custom &&
+        !HexSetting(name(L"customColor").c_str(), look.color)) {
+        look.background = Background::Light;
+    }
+    look.opacity = percent(L"opacity");
+    look.blur = percent(L"blur");
+    look.border = (Border)ChoiceSetting(name(L"border").c_str(),
+                                        {L"mac", L"standard", L"custom", L"none"}, 0);
+    look.borderOpacity = percent(L"borderOpacity");
+    look.borderWidth = std::clamp(Wh_GetIntSetting(name(L"borderWidth").c_str()), 0, 8);
+    if (look.border == Border::Custom &&
+        !HexSetting(name(L"borderColor").c_str(), look.borderColor)) {
+        std::fill(std::begin(look.borderColor), std::end(look.borderColor), 0xFF);
+    }
+    return look;
+}
+
+void ComputeSizes();
+
+void LoadSettings() {
+    auto& s = g_settings;
+    auto percent = [](PCWSTR name) { return std::clamp(Wh_GetIntSetting(name), 0, 100); };
+    auto padding = [](PCWSTR name) { return std::clamp(Wh_GetIntSetting(name), 0, 20); };
+
+    // Fallbacks match each setting's documented default.
+    s.size = percent(L"dockSize.size");
+    s.paddingH = padding(L"dockSize.paddingHorizontal");
+    s.paddingV = padding(L"dockSize.paddingVertical");
+    s.spacing = padding(L"dockSize.iconSpacing");
+    s.scale = 1.0f + percent(L"dockSize.magnification") / 100.0f;
+    s.range = percent(L"dockSize.magnificationRange");
+    s.animationMs = std::clamp(Wh_GetIntSetting(L"dockSize.animationSpeed"), 0, 1000);
+    s.autoHide = (AutoHide)ChoiceSetting(L"dockSize.autoHide", {L"hybrid", L"always", L"never"}, 0);
+
+    s.dockLook = LookSetting(L"dockColor");
+    s.trayLook = LookSetting(L"trayColor");
+    s.trayMatchDock = Wh_GetIntSetting(L"trayColor.matchDock");
+    s.dockBrightnessLimit =
+        Wh_GetIntSetting(L"dockColor.capBrightness") ? percent(L"dockColor.brightnessLimit") : 100;
+    s.trayBrightnessLimit =
+        Wh_GetIntSetting(L"trayColor.capBrightness") ? percent(L"trayColor.brightnessLimit") : 100;
+    s.glassStyle = (GlassStyle)ChoiceSetting(L"liquidGlass.edgeStyle",
+                                             {L"lens", L"reflection", L"stretch", L"off"}, 3);
+    s.glassDepth = (float)std::clamp(Wh_GetIntSetting(L"liquidGlass.edgeDepth"), 2, 100);
+    s.glassStrength = std::clamp(Wh_GetIntSetting(L"liquidGlass.edgeStrength"), 0, 150) / 100.0f;
+    s.glassBlur = std::clamp(Wh_GetIntSetting(L"liquidGlass.blur"), 0, 100);
+    s.trayPadding = std::clamp(Wh_GetIntSetting(L"trayColor.padding"), 0, 20);
+    s.trayShadow = Wh_GetIntSetting(L"trayColor.shadow");
+    s.trayShadowAuto = !HexSetting(L"trayColor.shadowColor", s.trayShadowColor);
+    s.trayShadowOpacity = percent(L"trayColor.shadowOpacity") / 100.0f;
+    s.trayShadowBlur = (float)std::clamp(Wh_GetIntSetting(L"trayColor.shadowBlur"), 0, 20);
+    s.trayShadowX = (float)std::clamp(Wh_GetIntSetting(L"trayColor.shadowOffsetX"), -10, 10);
+    s.trayShadowY = (float)std::clamp(Wh_GetIntSetting(L"trayColor.shadowOffsetY"), -10, 10);
+
+    s.hideStart = Wh_GetIntSetting(L"dockItems.hideStart");
+    s.explorerFirst = Wh_GetIntSetting(L"dockItems.explorerFirst");
+    s.recycleBin = Wh_GetIntSetting(L"dockItems.recycleBin");
+    s.highResIcons = Wh_GetIntSetting(L"dockItems.highResIcons");
+    s.tooltips = Wh_GetIntSetting(L"dockItems.tooltips");
+    s.indicators = (Indicators)ChoiceSetting(L"dockItems.indicators",
+                                             {L"mac", L"hybrid", L"windows", L"none"}, 0);
+    s.previews = Wh_GetIntSetting(L"dockItems.previews");
+    s.dividerAfterLeft = Wh_GetIntSetting(L"dockItems.dividerAfterExplorer");
+    s.dividerBeforeTrash = Wh_GetIntSetting(L"dockItems.dividerBeforeTrash");
+    s.customDividers.clear();
+    for (size_t i = 0; i < kMaxCustomDividers; i++) {
+        int at = Wh_GetIntSetting(L"dockItems.dividers[%d]", (int)i);
+        if (at > 0) s.customDividers.push_back(at);
+    }
+    std::sort(s.customDividers.begin(), s.customDividers.end());
+    s.customDividers.erase(std::unique(s.customDividers.begin(), s.customDividers.end()),
+                           s.customDividers.end());
+    s.launchBounce = Wh_GetIntSetting(L"dockItems.launchBounce");
+    s.keepIconsStill = Wh_GetIntSetting(L"dockItems.keepIconsStill");
+
+    s.squircleIcons = Wh_GetIntSetting(L"squircleIcons.enabled");
+    s.tileColor = (TileColor)ChoiceSetting(
+        L"squircleIcons.color",
+        {L"alwaysLight", L"preferLight", L"auto", L"preferDark", L"alwaysDark", L"custom"}, 2);
+    if (s.tileColor == TileColor::Custom &&
+        !HexSetting(L"squircleIcons.customColor", s.tileCustomColor)) {
+        s.tileColor = TileColor::Auto;
+    }
+    if (!HexSetting(L"squircleIcons.lightColor", s.tileLightColor)) {
+        s.tileLightColor[0] = s.tileLightColor[1] = s.tileLightColor[2] = 0xEE;
+    }
+    if (!HexSetting(L"squircleIcons.darkColor", s.tileDarkColor)) {
+        s.tileDarkColor[0] = s.tileDarkColor[1] = s.tileDarkColor[2] = 0x33;
+    }
+    s.tileVibrance = std::clamp(Wh_GetIntSetting(L"squircleIcons.vibrance"), 0, 200);
+    s.tileSheen = Wh_GetIntSetting(L"squircleIcons.sheen");
+    s.tileSheenOpacity = percent(L"squircleIcons.sheenOpacity");
+    s.tileSheenSize = percent(L"squircleIcons.sheenSize");
+    const PCWSTR sides[] = {L"top", L"bottom", L"left", L"right"};
+    const uint8_t defaultLevels[] = {0xFF, 0x00, 0xCC, 0xCC};  // the default colors' grays
+    for (size_t i = 0; i < s.tileEdges.size(); i++) {
+        auto name = [&](PCWSTR suffix) {
+            return std::wstring(L"squircleIcons.") + sides[i] + L"Glow" + suffix;
+        };
+        TileEdge& edge = s.tileEdges[i];
+        edge.opacity = percent(name(L"Opacity").c_str());
+        edge.size = std::clamp(Wh_GetIntSetting(name(L"Size").c_str()), 0, 50);
+        if (!HexSetting(name(L"Color").c_str(), edge.color)) {
+            edge.color[0] = edge.color[1] = edge.color[2] = defaultLevels[i];
+        }
+    }
+    s.tileShadowSpread = std::clamp(Wh_GetIntSetting(L"squircleIcons.shadowSpread"), 0, 10);
+    s.tileShadowDistance = std::clamp(Wh_GetIntSetting(L"squircleIcons.shadowDistance"), 0, 10);
+    s.tileShadowOpacity = percent(L"squircleIcons.shadowOpacity");
+    s.tileShadowDirection = (ShadowDirection)ChoiceSetting(
+        L"squircleIcons.shadowDirection",
+        {L"down", L"downLeft", L"downRight", L"left", L"right", L"up", L"centered"}, 0);
+    s.tileCorner =
+        (CornerStyle)ChoiceSetting(L"squircleIcons.cornerStyle", {L"squircle", L"rounded"}, 0);
+    s.tileCornerRadius = std::clamp(Wh_GetIntSetting(L"squircleIcons.cornerRadius"), 0, 50);
+
+    s.customFinder = CustomIconSetting(L"customIcons.finderPath", L"customIcons.finderMargins");
+    s.customFinder.ignoreSquircle = Wh_GetIntSetting(L"customIcons.finderIgnoreSquircle");
+    s.customStart = CustomIconSetting(L"customIcons.startPath", L"customIcons.startMargins");
+    s.customStart.ignoreSquircle = Wh_GetIntSetting(L"customIcons.startIgnoreSquircle");
+    s.customTrash =
+        CustomIconSetting(L"customIcons.trashEmptyPath", L"customIcons.trashEmptyMargins",
+                          L"customIcons.trashFullPath", L"customIcons.trashFullMargins");
+    s.appIcons.clear();
+    for (int i = 0; i < kMaxAppIcons; i++) {
+        std::wstring key = L"customIcons.apps[" + std::to_wstring(i) + L"].";
+        std::wstring app = TrimmedSetting((key + L"app").c_str());
+        // The list ends at its first blank entry.
+        if (app.empty() && TrimmedSetting((key + L"icon").c_str()).empty()) break;
+        AppIcon entry;
+        entry.icon = CustomIconSetting((key + L"icon").c_str(), (key + L"margins").c_str());
+        if (app.empty() || entry.icon.path.empty()) continue;
+        entry.exe = EndsWithNoCase(app, L".exe");
+        entry.app = entry.exe && app.find(L'\\') != app.npos ? ExpandVariables(app) : app;
+        entry.icon.ignoreSquircle = Wh_GetIntSetting((key + L"ignoreSquircle").c_str());
+        s.appIcons.push_back(std::move(entry));
+    }
+
+    s.leftCorner = (LeftCorner)ChoiceSetting(L"hotCorners.bottomLeft",
+                                             {L"taskView", L"start", L"off"}, 0);
+    s.tray = (Show)ChoiceSetting(L"hotCorners.bottomRight", {L"tray", L"hidden", L"visible"}, 0);
+
+    for (size_t i = 0; i < s.dockEdges.size(); i++) {
+        auto name = [&](PCWSTR suffix) {
+            return std::wstring(L"dockColor.") + sides[i] + L"Glow" + suffix;
+        };
+        DockEdge& edge = s.dockEdges[i];
+        edge.lighter = !HexSetting(name(L"Color").c_str(), edge.color);
+        edge.opacity = percent(name(L"Opacity").c_str());
+        edge.size = std::clamp(Wh_GetIntSetting(name(L"Size").c_str()), 0, 50);
+    }
+    // With none set, the tooltips match the dock (see BubbleFill). Earlier
+    // versions kept the color in Additional Settings, which is no longer
+    // shown, so a color left there couldn't be cleared: it's not read.
+    s.tooltipColorAuto = !HexSetting(L"tooltips.color", s.tooltipColor);
+    if (s.tooltipColorAuto) {
+        Wh_Log(L"Tooltip color: matching the dock");
+    } else {
+        Wh_Log(L"Tooltip color: #%02X%02X%02X, as set in Tooltips", s.tooltipColor[0],
+               s.tooltipColor[1], s.tooltipColor[2]);
+    }
+    s.tooltipFont = TrimmedSetting(L"tooltips.font");
+    s.tooltipFontSize = std::clamp(Wh_GetIntSetting(L"tooltips.fontSize"), 8, 32);
+    s.tooltipRadius = std::clamp(Wh_GetIntSetting(L"tooltips.cornerRadius"), 0, 50);
+    s.tooltipTail = Wh_GetIntSetting(L"tooltips.tail");
+    for (size_t i = 0; i < s.tooltipEdges.size(); i++) {
+        auto name = [&](PCWSTR suffix) {
+            return std::wstring(L"tooltips.") + sides[i] + L"Glow" + suffix;
+        };
+        TileEdge& edge = s.tooltipEdges[i];
+        edge.opacity = percent(name(L"Opacity").c_str());
+        edge.size = std::clamp(Wh_GetIntSetting(name(L"Size").c_str()), 0, 50);
+        // Blank gives the same color as squircle icons' default.
+        if (!HexSetting(name(L"Color").c_str(), edge.color)) {
+            edge.color[0] = edge.color[1] = edge.color[2] = defaultLevels[i];
+        }
+    }
+    g_settingsVersion++;
+
+    ComputeSizes();
+}
+
 
 // =============================================================================
-// DECLARED AHEAD
+// SIZES
 // =============================================================================
-// What's used before the section that defines it.
 
-struct IconSwap;
-struct Plate;
+constexpr float kStockIconSize = 24;
+constexpr float kStockButtonWidth = 44;
+constexpr double kStockTaskbarHeight = 48;
+constexpr int kMinTaskbarHeight = 40;           // keeps the clock from being squashed
+constexpr float kDefaultIconSize = 44;          // at Size 60; spacing settings are pixels here
+constexpr float kButtonIconPadding = 8;         // a button is at least its icon + this wide
+constexpr float kTrashIconScale = 1.15f;        // Windows' bin icon has empty space around it
+constexpr float kTrashShift = 3;                // the Recycle Bin past its divider, moved left
+constexpr float kTrashMenuLift = 6;             // its menu's gap above the icon, at Size 60
+constexpr float kBounceRoom = 0.25f;            // above a fully magnified icon, of its size
+constexpr float kLaunchBounceHeight = 0.4f;     // how high an app's icon bounces, of its size
+constexpr float kDividerWidth = 1;
+constexpr float kDividerGapScale = 1.25f;       // space either side of a divider, in icon gaps
+constexpr float kDividerInsetScale = 0.7f;      // divider ends, as a share of the vertical padding
 
-void UpdateSwap(IconSwap& s, wuxc::Image const& image);
-void ColorDots(Plate& p);
-void ReapplyButton(wux::FrameworkElement const& button);
-void SuppressLabel();
-void MatchGlassCaptureVisibility(HWND hwnd);
-void StartFrames();
-void MarkPlatesDirty();
-void OnFrame();
-bool IsFlyout(HWND hwnd, bool popups);
-void ApplyTrayLooks();
-float TrayRoomFor(wux::XamlRoot const& root, bool background);
-void ScanTaskbars();
-bool StepLaunchBounces();
-void UpdateDockFit();
-void UpdateGlass();
-void FollowGlass();
-void GlassTrayRevealed();
-bool FollowPointerUnderTrashMenu();
-void OnTaskbarPointerExited();
-void MoveExplorerFirst(wux::FrameworkElement const& explorer);
-void NoteExplorerFirst();
-void HookTaskView();
-void NoteIconsMoving();
-void ClipTaskbars();
-void RemoveAppBars();
-void ScheduleOverWindows(bool autoHide);
-LRESULT CALLBACK ModWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+struct Sizes {
+    float icon;
+    float gap;                // between icons
+    float padX, padY;         // dock padding
+    float buttonWidth;
+    float buttonMargin;       // per side; negative pulls buttons together
+    float dockHeight, dockRadius, bottomGap;
+    float radius;             // how far from the pointer icons grow
+    float iconLoadSize;       // 0 = Windows' own
+    float dividerSpace, dividerLeft;
+    float trashSlot, trashSpace;
+    float bounceRoom;         // how much taller the taskbar is for the bounce
+} g_size;
 
-// #############################################################################
-// PART 1: FOUNDATION
-// #############################################################################
+int g_taskbarHeight = 0;      // 0 = the taskbar's normal height (while unloading)
+
+// The dock's icons as "Size" sets them, and as they are while it's shrunk to
+// fit the screen (see FITTING), as on a Mac: 0 when it isn't.
+float g_fullIcon = 0;
+float g_fitIcon = 0;
+constexpr float kMinFitIcon = kStockIconSize;  // it shrinks no smaller
+
+bool DockSizesIcons() { return g_taskbarHeight > 0; }
+float DividerInset() { return std::round(g_size.padY * kDividerInsetScale); }
+
+// The dock's sizes with icons `icon` pixels, by the settings.
+Sizes SizesFor(float icon) {
+    auto& s = g_settings;
+    Sizes z{};
+    float k = icon / kDefaultIconSize;
+
+    z.icon = icon;
+    z.gap = std::round(s.spacing * k);
+    z.padX = std::round(s.paddingH * k);
+    z.padY = std::round(s.paddingV * k);
+    // Each button holds its icon and the gap, half on each side, so the taskbar
+    // moves apps a whole spot when dragging.
+    z.buttonWidth = std::max(kStockButtonWidth, icon + std::max(kButtonIconPadding, z.gap));
+    z.buttonMargin = (icon + z.gap - z.buttonWidth) / 2;
+    z.dockHeight = icon + 2 * z.padY;
+    z.dockRadius = std::round(z.dockHeight * 0.3f);
+    z.bottomGap = std::round(icon / 7);
+    z.radius = icon * (1 + s.range / 20.0f);
+
+    // Either side of a divider, past the half gap its neighbors hold.
+    float room = kDividerGapScale * z.gap;
+    z.dividerLeft = room + kDividerWidth / 2;
+    z.dividerSpace = room + kDividerWidth + room;
+    z.trashSlot = icon + z.gap;
+    z.trashSpace = (s.dividerBeforeTrash ? z.dividerSpace : 0) + z.trashSlot;
+    return z;
+}
+
+void SaveTaskbarTop();
+
+void ComputeSizes() {
+    auto& s = g_settings;
+    // Exponential: 0 -> 19px, 20 -> 25px, 60 -> 44px, 100 -> 77px.
+    float icon = std::round(kDefaultIconSize * std::exp2((s.size - 60) / 50.0f));
+    g_fullIcon = icon;
+    if (g_fitIcon >= icon) g_fitIcon = 0;
+    g_size = SizesFor(g_fitIcon > 0 ? g_fitIcon : icon);
+
+    // The taskbar's height and the icons' resolution stay as at full size, so
+    // shrinking to fit doesn't move maximized windows or reload icons.
+    Sizes z = SizesFor(icon);
+    g_size.iconLoadSize = s.highResIcons ? std::ceil(icon * s.scale) : 0;
+
+    // Tall enough for the dock and a fully magnified icon, plus 2px, with room
+    // above the icon for its bounce: Windows' own, or the dock's as an app's
+    // opened (see Launch bounce) if that's higher. They're as high as each
+    // other at Magnification 60, so rounding isn't left to pick one.
+    float dockTop = z.bottomGap + z.dockHeight;
+    float iconTop = z.bottomGap + z.padY + s.scale * icon;
+    float bounce = s.scale * icon * kBounceRoom;
+    float launchBounce = s.launchBounce ? icon * kLaunchBounceHeight : 0;
+    if (launchBounce > bounce + 0.01f) bounce = launchBounce;
+    int height = std::max((int)std::ceil(std::max(dockTop, iconTop) + 2), kMinTaskbarHeight);
+    g_taskbarHeight = std::max(height, (int)std::ceil(iconTop + bounce));
+    // As the dock shrinks, the taskbar keeps its height: the room's above it.
+    g_size.bounceRoom = (float)g_taskbarHeight - std::max(
+        std::ceil(std::max(g_size.bottomGap + g_size.dockHeight,
+                           g_size.bottomGap + g_size.padY + s.scale * g_size.icon) + 2),
+        (float)kMinTaskbarHeight);
+
+    auto const& g = g_size;
+    Wh_Log(L"Icon %.0f%s (loaded at %.0f), dock %.0f, taskbar %d, gap %.0f, padding %.0f x %.0f",
+           g.icon, g_fitIcon > 0 ? L" (shrunk to fit)" : L"", g.iconLoadSize, g.dockHeight,
+           g_taskbarHeight, g.gap, g.padX, g.padY);
+    SaveTaskbarTop();
+}
 
 // =============================================================================
 // UTILITIES
@@ -1274,632 +1739,6 @@ bool Try(F&& f, PCWSTR what = nullptr) {
     }
 }
 
-// ---- Strings, system functions and saved values ----
-
-bool EndsWithNoCase(std::wstring_view text, std::wstring_view end) {
-    return text.size() >= end.size() &&
-           !_wcsnicmp(text.data() + text.size() - end.size(), end.data(), end.size());
-}
-
-// %VARIABLES% in `text` filled in.
-std::wstring ExpandVariables(std::wstring const& text) {
-    std::wstring path(ExpandEnvironmentStringsW(text.c_str(), nullptr, 0), L'\0');
-    DWORD length = ExpandEnvironmentStringsW(text.c_str(), path.data(), (DWORD)path.size());
-    return length && length <= path.size() ? path.substr(0, length - 1) : text;
-}
-
-std::wstring_view FileName(std::wstring_view path) {
-    size_t slash = path.find_last_of(L"\\/");
-    return slash == path.npos ? path : path.substr(slash + 1);
-}
-
-// A function from a system DLL, looked up as the mod's headers or libraries
-// may lack it. The DLL is one the mod imports, so it's already loaded and no
-// reference is added; failing that, it's loaded from System32 only.
-template <typename F>
-F LoadSystemFunction(PCWSTR dll, PCSTR name) {
-    HMODULE module = GetModuleHandleW(dll);
-    if (!module) module = LoadLibraryExW(dll, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    auto f = module ? (F)GetProcAddress(module, name) : nullptr;
-    if (!f) winrt::throw_hresult(E_NOINTERFACE);
-    return f;
-}
-
-// The name of a value the mod saves, with the current user's ID, so each
-// user of the PC has their own.
-std::wstring UserValueName(PCWSTR name) {
-    static std::wstring sid = [] {
-        std::wstring result;
-        HANDLE token;
-        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return result;
-        alignas(TOKEN_USER) BYTE buffer[sizeof(TOKEN_USER) + SECURITY_MAX_SID_SIZE];
-        DWORD size;
-        PWSTR text;
-        if (GetTokenInformation(token, TokenUser, buffer, sizeof(buffer), &size) &&
-            ConvertSidToStringSidW(((TOKEN_USER*)buffer)->User.Sid, &text)) {
-            result = text;
-            LocalFree(text);
-        }
-        CloseHandle(token);
-        return result;
-    }();
-    return std::wstring(name) + L"_" + sid;
-}
-
-// =============================================================================
-// SETTINGS
-// =============================================================================
-
-enum class Background { Light, Dark, System, Custom, None };
-enum class Border { Mac, Standard, Custom, None };
-enum class LeftCorner { TaskView, Start, Off };
-enum class Show { HotCorner, Hidden, Visible };  // the system tray
-enum class AutoHide { Hybrid, On, Off };
-// Behind squircle icons' shapes.
-enum class TileColor { AlwaysLight, PreferLight, Auto, PreferDark, AlwaysDark, Custom };
-enum class ShadowDirection { Down, DownLeft, DownRight, Left, Right, Up, Centered };
-enum class CornerStyle { Squircle, Rounded };
-
-// The dock's glow or shadow along one side (see DrawMacBorder): as a tile's, but
-// sized by the dock's height, and blank gives a lighter shade of its color.
-struct DockEdge {
-    bool lighter = true;  // a lighter shade of the background color, not `color`
-    uint8_t color[3] = {};
-    int opacity = 0;  // percent
-    int size = 0;     // how far in it reaches, as a percent of the dock's height
-};
-
-// A tile's glow or shadow along one side, fading in from its edge.
-struct TileEdge {
-    uint8_t color[3] = {};
-    int opacity = 0;  // percent
-    int size = 0;     // how far in it reaches, as a percent of the tile
-    bool operator==(TileEdge const&) const = default;
-};
-enum class Indicators { Dots, HybridDots, Windows, None };  // running apps
-enum class GlassStyle { Lens, Reflection, Stretch, Off };  // how Liquid Glass bends the rim
-
-constexpr float kMacIconScale = 1024.0f / 824;  // macOS icons fill 824 of 1024px, for shadows
-constexpr size_t kMaxCustomDividers = 5;
-constexpr int kMaxAppIcons = 100;  // in "App Icons"
-
-// The user's own Finder, Start or Trash icon. None while `path` is empty.
-struct CustomIcon {
-    std::wstring path, fullPath;  // image files; fullPath for a full Recycle Bin
-    float size = 1;               // the artwork, of the icon size
-    float scale = 1;              // the image, of the icon size, margin included
-    float fullSize = 1, fullScale = 1;  // the same for fullPath's image
-    bool ignoreSquircle = false;        // shown as it is, not in a squircle tile
-};
-
-// The user's own icon for an app, in "App Icons".
-struct AppIcon {
-    std::wstring app;  // as typed: its ID, its name, or its .exe
-    bool exe = false;  // `app` is an .exe: a file name, or a full path
-    CustomIcon icon;
-};
-
-// A background like the dock's: the dock's own, or the tray's.
-struct Look {
-    Background background;
-    uint8_t color[3];        // for Custom
-    int opacity;             // 0-100
-    int blur;                // 0-100
-    Border border;
-    int borderOpacity;       // 0-100, for Standard and Custom
-    int borderWidth;         // pixels, for Standard and Custom
-    uint8_t borderColor[3];  // for Custom
-};
-
-struct Settings {
-    int size;
-    int paddingH, paddingV, spacing;
-    float scale;  // magnification, 1.0-2.0
-    int range;
-    int animationMs;
-    AutoHide autoHide;
-    Look dockLook, trayLook;
-    bool trayMatchDock;
-    int dockBrightnessLimit;  // percent; 100 for none (Cap Per-Pixel Brightness off)
-    int trayBrightnessLimit;  // the same, for the tray
-    GlassStyle glassStyle;    // Liquid Glass
-    float glassDepth;         // the bent rim, in pixels at 100% scaling
-    float glassStrength;      // 1 for full strength
-    int glassBlur;            // 0-100, like Look::blur, in its place
-    int trayPadding;          // pixels, past kTrayPlateInsetX and Y
-    bool trayShadow;          // under the tray's text and icons
-    bool trayShadowAuto;      // its color follows the text's
-    uint8_t trayShadowColor[3];
-    float trayShadowOpacity;  // 0-1
-    float trayShadowBlur;     // pixels
-    float trayShadowX, trayShadowY;
-    bool hideStart;
-    bool explorerFirst;
-    bool recycleBin;
-    bool highResIcons;
-    bool tooltips;
-    Indicators indicators;
-    bool previews;
-    bool dividerAfterLeft;    // after Start, Task View and File Explorer
-    bool dividerBeforeTrash;
-    std::vector<int> customDividers;  // after these icons, counted from 1; sorted
-    bool squircleIcons;
-    bool launchBounce;    // an app's icon bounces as it's opened from the dock
-    bool keepIconsStill;  // no bounce as apps open, close, minimize or are restored
-    TileColor tileColor;
-    uint8_t tileCustomColor[3];
-    uint8_t tileLightColor[3], tileDarkColor[3];  // the tiles Light and Dark give
-    int tileVibrance;  // 0-200, 100 for the icons' own colors
-    bool tileSheen;
-    int tileSheenOpacity;  // percent
-    int tileSheenSize;     // how far down it reaches, as a percent of the tile
-    std::array<TileEdge, 4> tileEdges;  // top, bottom, left, right
-    int tileShadowSpread;               // 0-10, how soft
-    int tileShadowDistance;             // 0-10, how far it falls
-    int tileShadowOpacity;              // percent
-    ShadowDirection tileShadowDirection;
-    CornerStyle tileCorner;
-    int tileCornerRadius;  // percent of the tile
-    CustomIcon customFinder, customStart, customTrash;
-    std::vector<AppIcon> appIcons;
-    LeftCorner leftCorner;
-    Show tray;
-    std::array<DockEdge, 4> dockEdges;  // top, bottom, left, right
-    uint8_t tooltipColor[3];
-    bool tooltipColorAuto;     // none set: light on a light dock, dark on a dark one
-    std::wstring tooltipFont;  // as typed; empty for Segoe UI
-    int tooltipFontSize;       // 8-32, in view pixels
-    int tooltipRadius;         // 0-50, percent of the tooltip's height
-    bool tooltipTail;
-    // Top, bottom, left, right, as tiles' but sized by the tooltip's height.
-    std::array<TileEdge, 4> tooltipEdges;
-} g_settings;
-int g_settingsVersion = 0;  // counts loads, for what's measured once per look
-
-// The tray's background: its own, or the dock's.
-Look const& TrayLook() {
-    return g_settings.trayMatchDock ? g_settings.dockLook : g_settings.trayLook;
-}
-
-// =============================================================================
-// SIZES
-// =============================================================================
-
-constexpr float kStockIconSize = 24;
-constexpr float kStockButtonWidth = 44;
-constexpr double kStockTaskbarHeight = 48;
-constexpr int kMinTaskbarHeight = 40;           // keeps the clock from being squashed
-constexpr float kDefaultIconSize = 44;          // at Size 60; spacing settings are pixels here
-constexpr float kButtonIconPadding = 8;         // a button is at least its icon + this wide
-constexpr float kTrashIconScale = 1.15f;        // Windows' bin icon has empty space around it
-constexpr float kTrashShift = 3;                // the Recycle Bin past its divider, moved left
-constexpr float kTrashMenuLift = 6;             // its menu's gap above the icon, at Size 60
-constexpr float kBounceRoom = 0.25f;            // above a fully magnified icon, of its size
-constexpr float kLaunchBounceHeight = 0.4f;     // how high an app's icon bounces, of its size
-constexpr float kDividerWidth = 1;
-constexpr float kDividerGapScale = 1.25f;       // space either side of a divider, in icon gaps
-constexpr float kDividerInsetScale = 0.7f;      // divider ends, as a share of the vertical padding
-
-struct Sizes {
-    float icon;
-    float gap;                // between icons
-    float padX, padY;         // dock padding
-    float buttonWidth;
-    float buttonMargin;       // per side; negative pulls buttons together
-    float dockHeight, dockRadius, bottomGap;
-    float radius;             // how far from the pointer icons grow
-    float iconLoadSize;       // 0 = Windows' own
-    float dividerSpace, dividerLeft;
-    float trashSlot, trashSpace;
-    float bounceRoom;         // how much taller the taskbar is for the bounce
-} g_size;
-
-int g_taskbarHeight = 0;      // 0 = the taskbar's normal height (while unloading)
-
-// The dock's icons as "Size" sets them, and as they are while it's shrunk to
-// fit the screen (see FITTING), as on a Mac: 0 when it isn't.
-float g_fullIcon = 0;
-float g_fitIcon = 0;
-constexpr float kMinFitIcon = kStockIconSize;  // it shrinks no smaller
-
-bool DockSizesIcons() { return g_taskbarHeight > 0; }
-float DividerInset() { return std::round(g_size.padY * kDividerInsetScale); }
-
-// The dock's sizes with icons `icon` pixels, by the settings.
-Sizes SizesFor(float icon) {
-    auto& s = g_settings;
-    Sizes z{};
-    float k = icon / kDefaultIconSize;
-
-    z.icon = icon;
-    z.gap = std::round(s.spacing * k);
-    z.padX = std::round(s.paddingH * k);
-    z.padY = std::round(s.paddingV * k);
-    // Each button holds its icon and the gap, half on each side, so the taskbar
-    // moves apps a whole spot when dragging.
-    z.buttonWidth = std::max(kStockButtonWidth, icon + std::max(kButtonIconPadding, z.gap));
-    z.buttonMargin = (icon + z.gap - z.buttonWidth) / 2;
-    z.dockHeight = icon + 2 * z.padY;
-    z.dockRadius = std::round(z.dockHeight * 0.3f);
-    z.bottomGap = std::round(icon / 7);
-    z.radius = icon * (1 + s.range / 20.0f);
-
-    // Either side of a divider, past the half gap its neighbors hold.
-    float room = kDividerGapScale * z.gap;
-    z.dividerLeft = room + kDividerWidth / 2;
-    z.dividerSpace = room + kDividerWidth + room;
-    z.trashSlot = icon + z.gap;
-    z.trashSpace = (s.dividerBeforeTrash ? z.dividerSpace : 0) + z.trashSlot;
-    return z;
-}
-
-// ---- The tray ----
-// Its row keeps Windows' usual height, at the bottom of the taller taskbar
-// (see SYSTEM TRAY), with its background around it.
-
-constexpr float kTrayPlateInsetX = 4;       // the background, in from the tray's items
-constexpr float kTrayPlateInsetY = 4;       // and its row, less Tray Padding (see TrayOffset)
-constexpr float kTrayLeftExtra = 4;         // more room on the left, where the first item
-                                            // (often the ^ button) draws right to its edge
-
-// How far the tray is moved up and left, by its row's margin: by Tray Padding,
-// so as its background grows by that around the icons and clock, it keeps its
-// distance (kTrayPlateInsetX and Y) from the screen's right and bottom edges.
-float TrayOffset() { return (float)g_settings.trayPadding; }
-
-// How far the tray's background reaches past its row, above and to the left.
-float TrayPlateAbove() { return std::max(0.0f, g_settings.trayPadding - kTrayPlateInsetY); }
-float TrayPlateLeft() {
-    return std::max(0.0f, g_settings.trayPadding + kTrayLeftExtra - kTrayPlateInsetX);
-}
-
-// How far up the tray reaches from the screen's bottom edge: its row, the
-// offset under it and its background past its top.
-double TrayRowSpan() { return kStockTaskbarHeight + TrayOffset() + TrayPlateAbove(); }
-
-// ---- How much of the taskbar shows ----
-
-// How far up from the screen's bottom edge the taskbar shows, in pixels at
-// 100%: the dock, or the tray if it's ever shown. The tray's menus open just
-// above it (see Menus::AboveTaskbarTop). Quick Settings is placed in its own
-// process, which reads it from what's saved here.
-constexpr PCWSTR kTaskbarTopValue = L"taskbarTop";
-
-int TaskbarTop() {
-    double top = std::max<double>(g_size.bottomGap + g_size.dockHeight, kStockTaskbarHeight);
-    if (g_settings.tray != Show::Hidden) top = std::max(top, TrayRowSpan());
-    return (int)std::ceil(top);
-}
-
-void SaveTaskbarTop() {
-    static int saved = -1;
-    int value = TaskbarTop();
-    if (value == saved) return;
-    saved = value;
-    Wh_SetIntValue(UserValueName(kTaskbarTopValue).c_str(), value);
-}
-
-// The strip kept free: the dock and the gap under it, at least as tall as the
-// stock taskbar. The tray, when it shows, is added to it (see TaskbarRegion).
-int StripHeight(UINT dpi) {
-    float height = std::max(g_size.bottomGap + g_size.dockHeight, (float)kStockTaskbarHeight);
-    return MulDiv((int)std::ceil(height), dpi, 96);
-}
-
-void ComputeSizes() {
-    auto& s = g_settings;
-    // Exponential: 0 -> 19px, 20 -> 25px, 60 -> 44px, 100 -> 77px.
-    float icon = std::round(kDefaultIconSize * std::exp2((s.size - 60) / 50.0f));
-    g_fullIcon = icon;
-    if (g_fitIcon >= icon) g_fitIcon = 0;
-    g_size = SizesFor(g_fitIcon > 0 ? g_fitIcon : icon);
-
-    // The taskbar's height and the icons' resolution stay as at full size, so
-    // shrinking to fit doesn't move maximized windows or reload icons.
-    Sizes z = SizesFor(icon);
-    g_size.iconLoadSize = s.highResIcons ? std::ceil(icon * s.scale) : 0;
-
-    // Tall enough for the dock and a fully magnified icon, plus 2px, with room
-    // above the icon for its bounce: Windows' own, or the dock's as an app's
-    // opened (see Launch bounce) if that's higher. They're as high as each
-    // other at Magnification 60, so rounding isn't left to pick one.
-    float dockTop = z.bottomGap + z.dockHeight;
-    float iconTop = z.bottomGap + z.padY + s.scale * icon;
-    float bounce = s.scale * icon * kBounceRoom;
-    float launchBounce = s.launchBounce ? icon * kLaunchBounceHeight : 0;
-    if (launchBounce > bounce + 0.01f) bounce = launchBounce;
-    int height = std::max((int)std::ceil(std::max(dockTop, iconTop) + 2), kMinTaskbarHeight);
-    g_taskbarHeight = std::max(height, (int)std::ceil(iconTop + bounce));
-    // As the dock shrinks, the taskbar keeps its height: the room's above it.
-    g_size.bounceRoom = (float)g_taskbarHeight - std::max(
-        std::ceil(std::max(g_size.bottomGap + g_size.dockHeight,
-                           g_size.bottomGap + g_size.padY + s.scale * g_size.icon) + 2),
-        (float)kMinTaskbarHeight);
-
-    auto const& g = g_size;
-    Wh_Log(L"Icon %.0f%s (loaded at %.0f), dock %.0f, taskbar %d, gap %.0f, padding %.0f x %.0f",
-           g.icon, g_fitIcon > 0 ? L" (shrunk to fit)" : L"", g.iconLoadSize, g.dockHeight,
-           g_taskbarHeight, g.gap, g.padX, g.padY);
-    SaveTaskbarTop();
-}
-
-// =============================================================================
-// SETTINGS: LOADING
-// =============================================================================
-// Each number is held within its range, and a choice or color that can't be
-// read gives the setting's documented default.
-
-// Reads 6 hex digits ("#333333"), ignoring '#' and spaces.
-bool ParseHexColor(std::wstring_view text, uint8_t rgb[3]) {
-    std::wstring digits;
-    for (wchar_t c : text) {
-        if (c == L'#' || iswspace(c)) continue;
-        if (!iswxdigit(c)) return false;
-        digits.push_back(c);
-    }
-    if (digits.size() != 6) return false;
-    for (int i = 0; i < 3; i++) {
-        rgb[i] = (uint8_t)std::wcstoul(digits.substr(i * 2, 2).c_str(), nullptr, 16);
-    }
-    return true;
-}
-
-// The index of a string setting's value among `options`, or `fallback`.
-int ChoiceSetting(PCWSTR name, std::initializer_list<PCWSTR> options, int fallback) {
-    auto value = WindhawkUtils::StringSetting::make(name);
-    int i = 0;
-    for (PCWSTR option : options) {
-        if (!wcscmp(value, option)) return i;
-        i++;
-    }
-    return fallback;
-}
-
-// A string setting without the spaces and quotes around it, as when copied.
-std::wstring TrimmedSetting(PCWSTR name) {
-    auto value = WindhawkUtils::StringSetting::make(name);
-    std::wstring_view text = value ? (PCWSTR)value : L"";
-    auto trimmed = [](wchar_t c) { return iswspace(c) || c == L'"'; };
-    while (!text.empty() && trimmed(text.front())) text.remove_prefix(1);
-    while (!text.empty() && trimmed(text.back())) text.remove_suffix(1);
-    return std::wstring(text);
-}
-
-// A file's path from a string setting, as typed or copied: surrounding quotes
-// and %VARIABLES% are fine. Empty if there's no file there.
-std::wstring PathSetting(PCWSTR name) {
-    std::wstring text = TrimmedSetting(name);
-    if (text.empty()) return {};
-    std::wstring path = ExpandVariables(text);
-    DWORD attributes = GetFileAttributesW(path.c_str());
-    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
-        Wh_Log(L"No file at %s", path.c_str());
-        return {};
-    }
-    return path;
-}
-
-// A hex color setting into `rgb`. False, leaving `rgb` alone, if it isn't one.
-bool HexSetting(PCWSTR name, uint8_t rgb[3]) {
-    auto value = WindhawkUtils::StringSetting::make(name);
-    PCWSTR text = value ? (PCWSTR)value : L"";
-    if (ParseHexColor(text, rgb)) return true;
-    if (*text) Wh_Log(L"%s \"%s\" isn't 6 hex digits", name, text);
-    return false;
-}
-
-// An icon's margin setting, -50 to 50: how much smaller (or, below 0, bigger)
-// than other icons its artwork is, in percent. At 0, a macOS icon's artwork
-// (824 of 1024 pixels, the rest left for its shadow) matches app icons.
-void ApplyMargin(PCWSTR name, float& size, float& scale) {
-    size = (100 - std::clamp(Wh_GetIntSetting(name), -50, 50)) / 100.0f;
-    scale = size * kMacIconScale;
-}
-
-CustomIcon CustomIconSetting(PCWSTR path, PCWSTR margin, PCWSTR fullPath = nullptr,
-                             PCWSTR fullMargin = nullptr) {
-    CustomIcon icon;
-    icon.path = PathSetting(path);
-    ApplyMargin(margin, icon.size, icon.scale);
-    icon.fullSize = icon.size;
-    icon.fullScale = icon.scale;
-    if (fullPath) icon.fullPath = PathSetting(fullPath);
-    if (!icon.fullPath.empty()) ApplyMargin(fullMargin, icon.fullSize, icon.fullScale);
-    return icon;
-}
-
-// A Look from the settings in `group`: dockColor or trayColor.
-Look LookSetting(std::wstring const& group) {
-    auto name = [&](PCWSTR key) { return group + L"." + key; };
-    auto percent = [&](PCWSTR key) {
-        return std::clamp(Wh_GetIntSetting(name(key).c_str()), 0, 100);
-    };
-    Look look{};
-    look.background = (Background)ChoiceSetting(
-        name(L"background").c_str(), {L"light", L"dark", L"system", L"custom", L"none"}, 0);
-    if (look.background == Background::Custom &&
-        !HexSetting(name(L"customColor").c_str(), look.color)) {
-        look.background = Background::Light;
-    }
-    look.opacity = percent(L"opacity");
-    look.blur = percent(L"blur");
-    look.border = (Border)ChoiceSetting(name(L"border").c_str(),
-                                        {L"mac", L"standard", L"custom", L"none"}, 0);
-    look.borderOpacity = percent(L"borderOpacity");
-    look.borderWidth = std::clamp(Wh_GetIntSetting(name(L"borderWidth").c_str()), 0, 8);
-    if (look.border == Border::Custom &&
-        !HexSetting(name(L"borderColor").c_str(), look.borderColor)) {
-        std::fill(std::begin(look.borderColor), std::end(look.borderColor), 0xFF);
-    }
-    return look;
-}
-
-// ---- Glows and shadows ----
-// The dock's, squircle icons' and tooltips' settings each have a glow or
-// shadow for every side, as <side>GlowColor, <side>GlowOpacity and
-// <side>GlowSize.
-
-constexpr PCWSTR kSides[] = {L"top", L"bottom", L"left", L"right"};
-
-// One side's glow or shadow, from the settings in `group`. False, leaving
-// `color` alone, if its color is blank or isn't one.
-bool EdgeSetting(std::wstring const& group, size_t side, uint8_t color[3], int& opacity,
-                 int& size) {
-    std::wstring name = group + L"." + kSides[side] + L"Glow";
-    opacity = std::clamp(Wh_GetIntSetting((name + L"Opacity").c_str()), 0, 100);
-    size = std::clamp(Wh_GetIntSetting((name + L"Size").c_str()), 0, 50);
-    return HexSetting((name + L"Color").c_str(), color);
-}
-
-// A tile's or a tooltip's four edges, from the settings in `group`. A blank
-// color gives the gray of squircle icons' default for that side.
-std::array<TileEdge, 4> TileEdgesSetting(std::wstring const& group) {
-    constexpr uint8_t kGrays[] = {0xFF, 0x00, 0xCC, 0xCC};  // top, bottom, left, right
-    std::array<TileEdge, 4> edges{};
-    for (size_t side = 0; side < edges.size(); side++) {
-        TileEdge& edge = edges[side];
-        if (!EdgeSetting(group, side, edge.color, edge.opacity, edge.size)) {
-            edge.color[0] = edge.color[1] = edge.color[2] = kGrays[side];
-        }
-    }
-    return edges;
-}
-
-void LoadSettings() {
-    auto& s = g_settings;
-    auto percent = [](PCWSTR name) { return std::clamp(Wh_GetIntSetting(name), 0, 100); };
-    auto padding = [](PCWSTR name) { return std::clamp(Wh_GetIntSetting(name), 0, 20); };
-
-    // Fallbacks match each setting's documented default.
-    s.size = percent(L"dockSize.size");
-    s.paddingH = padding(L"dockSize.paddingHorizontal");
-    s.paddingV = padding(L"dockSize.paddingVertical");
-    s.spacing = padding(L"dockSize.iconSpacing");
-    s.scale = 1.0f + percent(L"dockSize.magnification") / 100.0f;
-    s.range = percent(L"dockSize.magnificationRange");
-    s.animationMs = std::clamp(Wh_GetIntSetting(L"dockSize.animationSpeed"), 0, 1000);
-    s.autoHide = (AutoHide)ChoiceSetting(L"dockSize.autoHide", {L"hybrid", L"always", L"never"}, 0);
-
-    s.dockLook = LookSetting(L"dockColor");
-    s.trayLook = LookSetting(L"trayColor");
-    s.trayMatchDock = Wh_GetIntSetting(L"trayColor.matchDock");
-    s.dockBrightnessLimit =
-        Wh_GetIntSetting(L"dockColor.capBrightness") ? percent(L"dockColor.brightnessLimit") : 100;
-    s.trayBrightnessLimit =
-        Wh_GetIntSetting(L"trayColor.capBrightness") ? percent(L"trayColor.brightnessLimit") : 100;
-    s.glassStyle = (GlassStyle)ChoiceSetting(L"liquidGlass.edgeStyle",
-                                             {L"lens", L"reflection", L"stretch", L"off"}, 3);
-    s.glassDepth = (float)std::clamp(Wh_GetIntSetting(L"liquidGlass.edgeDepth"), 2, 100);
-    s.glassStrength = std::clamp(Wh_GetIntSetting(L"liquidGlass.edgeStrength"), 0, 150) / 100.0f;
-    s.glassBlur = std::clamp(Wh_GetIntSetting(L"liquidGlass.blur"), 0, 100);
-    s.trayPadding = std::clamp(Wh_GetIntSetting(L"trayColor.padding"), 0, 20);
-    s.trayShadow = Wh_GetIntSetting(L"trayColor.shadow");
-    s.trayShadowAuto = !HexSetting(L"trayColor.shadowColor", s.trayShadowColor);
-    s.trayShadowOpacity = percent(L"trayColor.shadowOpacity") / 100.0f;
-    s.trayShadowBlur = (float)std::clamp(Wh_GetIntSetting(L"trayColor.shadowBlur"), 0, 20);
-    s.trayShadowX = (float)std::clamp(Wh_GetIntSetting(L"trayColor.shadowOffsetX"), -10, 10);
-    s.trayShadowY = (float)std::clamp(Wh_GetIntSetting(L"trayColor.shadowOffsetY"), -10, 10);
-
-    s.hideStart = Wh_GetIntSetting(L"dockItems.hideStart");
-    s.explorerFirst = Wh_GetIntSetting(L"dockItems.explorerFirst");
-    s.recycleBin = Wh_GetIntSetting(L"dockItems.recycleBin");
-    s.highResIcons = Wh_GetIntSetting(L"dockItems.highResIcons");
-    s.tooltips = Wh_GetIntSetting(L"dockItems.tooltips");
-    s.indicators = (Indicators)ChoiceSetting(L"dockItems.indicators",
-                                             {L"mac", L"hybrid", L"windows", L"none"}, 0);
-    s.previews = Wh_GetIntSetting(L"dockItems.previews");
-    s.dividerAfterLeft = Wh_GetIntSetting(L"dockItems.dividerAfterExplorer");
-    s.dividerBeforeTrash = Wh_GetIntSetting(L"dockItems.dividerBeforeTrash");
-    s.customDividers.clear();
-    for (size_t i = 0; i < kMaxCustomDividers; i++) {
-        int at = Wh_GetIntSetting(L"dockItems.dividers[%d]", (int)i);
-        if (at > 0) s.customDividers.push_back(at);
-    }
-    std::sort(s.customDividers.begin(), s.customDividers.end());
-    s.customDividers.erase(std::unique(s.customDividers.begin(), s.customDividers.end()),
-                           s.customDividers.end());
-    s.launchBounce = Wh_GetIntSetting(L"dockItems.launchBounce");
-    s.keepIconsStill = Wh_GetIntSetting(L"dockItems.keepIconsStill");
-
-    s.squircleIcons = Wh_GetIntSetting(L"squircleIcons.enabled");
-    s.tileColor = (TileColor)ChoiceSetting(
-        L"squircleIcons.color",
-        {L"alwaysLight", L"preferLight", L"auto", L"preferDark", L"alwaysDark", L"custom"}, 2);
-    if (s.tileColor == TileColor::Custom &&
-        !HexSetting(L"squircleIcons.customColor", s.tileCustomColor)) {
-        s.tileColor = TileColor::Auto;
-    }
-    if (!HexSetting(L"squircleIcons.lightColor", s.tileLightColor)) {
-        s.tileLightColor[0] = s.tileLightColor[1] = s.tileLightColor[2] = 0xEE;
-    }
-    if (!HexSetting(L"squircleIcons.darkColor", s.tileDarkColor)) {
-        s.tileDarkColor[0] = s.tileDarkColor[1] = s.tileDarkColor[2] = 0x33;
-    }
-    s.tileVibrance = std::clamp(Wh_GetIntSetting(L"squircleIcons.vibrance"), 0, 200);
-    s.tileSheen = Wh_GetIntSetting(L"squircleIcons.sheen");
-    s.tileSheenOpacity = percent(L"squircleIcons.sheenOpacity");
-    s.tileSheenSize = percent(L"squircleIcons.sheenSize");
-    s.tileEdges = TileEdgesSetting(L"squircleIcons");
-    s.tileShadowSpread = std::clamp(Wh_GetIntSetting(L"squircleIcons.shadowSpread"), 0, 10);
-    s.tileShadowDistance = std::clamp(Wh_GetIntSetting(L"squircleIcons.shadowDistance"), 0, 10);
-    s.tileShadowOpacity = percent(L"squircleIcons.shadowOpacity");
-    s.tileShadowDirection = (ShadowDirection)ChoiceSetting(
-        L"squircleIcons.shadowDirection",
-        {L"down", L"downLeft", L"downRight", L"left", L"right", L"up", L"centered"}, 0);
-    s.tileCorner =
-        (CornerStyle)ChoiceSetting(L"squircleIcons.cornerStyle", {L"squircle", L"rounded"}, 0);
-    s.tileCornerRadius = std::clamp(Wh_GetIntSetting(L"squircleIcons.cornerRadius"), 0, 50);
-
-    s.customFinder = CustomIconSetting(L"customIcons.finderPath", L"customIcons.finderMargins");
-    s.customFinder.ignoreSquircle = Wh_GetIntSetting(L"customIcons.finderIgnoreSquircle");
-    s.customStart = CustomIconSetting(L"customIcons.startPath", L"customIcons.startMargins");
-    s.customStart.ignoreSquircle = Wh_GetIntSetting(L"customIcons.startIgnoreSquircle");
-    s.customTrash =
-        CustomIconSetting(L"customIcons.trashEmptyPath", L"customIcons.trashEmptyMargins",
-                          L"customIcons.trashFullPath", L"customIcons.trashFullMargins");
-    s.appIcons.clear();
-    for (int i = 0; i < kMaxAppIcons; i++) {
-        std::wstring key = L"customIcons.apps[" + std::to_wstring(i) + L"].";
-        std::wstring app = TrimmedSetting((key + L"app").c_str());
-        // The list ends at its first blank entry.
-        if (app.empty() && TrimmedSetting((key + L"icon").c_str()).empty()) break;
-        AppIcon entry;
-        entry.icon = CustomIconSetting((key + L"icon").c_str(), (key + L"margins").c_str());
-        if (app.empty() || entry.icon.path.empty()) continue;
-        entry.exe = EndsWithNoCase(app, L".exe");
-        entry.app = entry.exe && app.find(L'\\') != app.npos ? ExpandVariables(app) : app;
-        entry.icon.ignoreSquircle = Wh_GetIntSetting((key + L"ignoreSquircle").c_str());
-        s.appIcons.push_back(std::move(entry));
-    }
-
-    s.leftCorner = (LeftCorner)ChoiceSetting(L"hotCorners.bottomLeft",
-                                             {L"taskView", L"start", L"off"}, 0);
-    s.tray = (Show)ChoiceSetting(L"hotCorners.bottomRight", {L"tray", L"hidden", L"visible"}, 0);
-
-    for (size_t side = 0; side < s.dockEdges.size(); side++) {
-        DockEdge& edge = s.dockEdges[side];
-        edge.lighter = !EdgeSetting(L"dockColor", side, edge.color, edge.opacity, edge.size);
-    }
-    // With none set, the tooltips match the dock (see BubbleFill). Earlier
-    // versions kept the color in Additional Settings, which is no longer
-    // shown, so a color left there couldn't be cleared: it's not read.
-    s.tooltipColorAuto = !HexSetting(L"tooltips.color", s.tooltipColor);
-    if (s.tooltipColorAuto) {
-        Wh_Log(L"Tooltip color: matching the dock");
-    } else {
-        Wh_Log(L"Tooltip color: #%02X%02X%02X, as set in Tooltips", s.tooltipColor[0],
-               s.tooltipColor[1], s.tooltipColor[2]);
-    }
-    s.tooltipFont = TrimmedSetting(L"tooltips.font");
-    s.tooltipFontSize = std::clamp(Wh_GetIntSetting(L"tooltips.fontSize"), 8, 32);
-    s.tooltipRadius = std::clamp(Wh_GetIntSetting(L"tooltips.cornerRadius"), 0, 50);
-    s.tooltipTail = Wh_GetIntSetting(L"tooltips.tail");
-    s.tooltipEdges = TileEdgesSetting(L"tooltips");
-    g_settingsVersion++;
-
-    ComputeSizes();
-}
-
 // =============================================================================
 // SHELL JOBS
 // =============================================================================
@@ -1941,8 +1780,6 @@ void QueueShellJob(std::function<void()> job) {
 // A message-only window on the taskbar's thread; the app bars share its class.
 
 constexpr WCHAR kWindowClass[] = L"Windhawk_" WH_MOD_ID;
-
-// Messages to the mod's window.
 constexpr UINT kAppBarMessage = WM_APP;
 constexpr UINT kUpdateOverWindowsMessage = WM_APP + 1;
 constexpr UINT kTrashChangedMessage = WM_APP + 2;
@@ -1951,10 +1788,6 @@ constexpr UINT kMoveExplorerMessage = WM_APP + 4;
 constexpr UINT kGlassStopMessage = WM_APP + 5;    // Liquid Glass's emergency stop
 constexpr UINT kGlassFreezeMessage = WM_APP + 6;  // freezing or thawing it
 constexpr UINT kGlassFrameMessage = WM_APP + 7;   // a new picture of the screen behind it
-constexpr UINT kInfoKeyMessage = WM_APP + 8;      // Ctrl+I, over an icon
-constexpr UINT kInfoCloseMessage = WM_APP + 9;    // Esc, with an info card open
-
-// Its timers. (2 is the taskbar's own, on the taskbar's window: kTrayHideTimer.)
 constexpr UINT_PTR kReapplyTimer = 1;
 constexpr UINT_PTR kPollTimer = 3;
 constexpr UINT_PTR kTrayClipTimer = 4;
@@ -1965,6 +1798,8 @@ constexpr UINT_PTR kGlassTimer = 8;
 constexpr UINT kSquircleRetryMs = 50;
 
 std::atomic<HWND> g_modWindow = nullptr;
+
+LRESULT CALLBACK ModWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 bool RegisterWindowClass() {
     static bool registered = [] {
@@ -2062,67 +1897,11 @@ void RestoreOverrides() {
     g_overrides->clear();
 }
 
-// #############################################################################
-// PART 2: DRAWING
-// #############################################################################
-
 // =============================================================================
-// COLORS
+// IMAGES
 // =============================================================================
 
-bool IsLightColor(uint8_t r, uint8_t g, uint8_t b) {
-    return 0.299f * r + 0.587f * g + 0.114f * b > 140;
-}
 
-float Lightness(Color color) {
-    int max = std::max({color.R, color.G, color.B});
-    int min = std::min({color.R, color.G, color.B});
-    return (max + min) / 510.0f;
-}
-
-// `color` with its HSL lightness moved by `delta`.
-Color ShiftLightness(Color color, float delta) {
-    float r = color.R / 255.0f, g = color.G / 255.0f, b = color.B / 255.0f;
-    float max = std::max({r, g, b}), min = std::min({r, g, b});
-    float l = (max + min) / 2, h = 0, s = 0;
-    if (max != min) {
-        float d = max - min;
-        s = l > 0.5f ? d / (2 - max - min) : d / (max + min);
-        if (max == r) h = (g - b) / d + (g < b ? 6 : 0);
-        else if (max == g) h = (b - r) / d + 2;
-        else h = (r - g) / d + 4;
-        h /= 6;
-    }
-    l = std::clamp(l + delta, 0.0f, 1.0f);
-    auto channel = [](float p, float q, float t) {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        if (t < 1.0f / 6) return p + (q - p) * 6 * t;
-        if (t < 1.0f / 2) return q;
-        if (t < 2.0f / 3) return p + (q - p) * (2.0f / 3 - t) * 6;
-        return p;
-    };
-    if (s == 0) {
-        r = g = b = l;
-    } else {
-        float q = l < 0.5f ? l * (1 + s) : l + s - l * s;
-        float p = 2 * l - q;
-        r = channel(p, q, h + 1.0f / 3);
-        g = channel(p, q, h);
-        b = channel(p, q, h - 1.0f / 3);
-    }
-    auto byte = [](float v) { return (uint8_t)std::lround(std::clamp(v, 0.0f, 1.0f) * 255); };
-    return {color.A, byte(r), byte(g), byte(b)};
-}
-
-// =============================================================================
-// PIXELS
-// =============================================================================
-// Pictures are premultiplied BGRA bytes, top row first. Shapes are how much of
-// each pixel they cover, from 0 to 1. What the dock draws for itself (icon
-// tiles, the MacOS Style border, labels) is put together from these.
-
-// A buffer's bytes, as XAML's bitmaps and renders hand them out.
 MIDL_INTERFACE("905a0fef-bc53-11df-8c49-001e4fc686da")
 IDockBufferByteAccess : public IUnknown {
 public:
@@ -2130,6 +1909,14 @@ public:
 };
 __CRT_UUID_DECL(IDockBufferByteAccess, 0x905a0fef, 0xbc53, 0x11df, 0x8c, 0x49, 0x00, 0x1e, 0x4f,
                 0xc6, 0x86, 0xda)
+
+constexpr GUID kWICImagingFactoryId = {
+    0xcacaf262, 0x9370, 0x4615, {0xa1, 0x3b, 0x9f, 0x55, 0x39, 0xda, 0x4c, 0x0a}};
+constexpr GUID kIWICImagingFactoryId = {
+    0xec5ec8a9, 0xc395, 0x4314, {0x9c, 0x77, 0x54, 0xd7, 0xa9, 0x35, 0xff, 0x70}};
+constexpr GUID kWICPixelFormat32bppPBGRA = {
+    0x6fddc324, 0x4e03, 0x4bfe, {0xb1, 0x85, 0x3d, 0x77, 0x76, 0x8d, 0xc9, 0x10}};
+constexpr auto kWICHighQualityCubic = (WICBitmapInterpolationMode)4;
 
 // A XAML bitmap from premultiplied BGRA pixels, top row first.
 wuxm::ImageSource BitmapFromPixels(int width, int height, std::vector<BYTE> const& pixels) {
@@ -2140,154 +1927,6 @@ wuxm::ImageSource BitmapFromPixels(int width, int height, std::vector<BYTE> cons
     bitmap.Invalidate();
     return bitmap;
 }
-
-// A copy of a buffer's bytes.
-std::vector<BYTE> BufferBytes(wss::IBuffer const& buffer) {
-    BYTE* data = nullptr;
-    winrt::check_hresult(buffer.as<IDockBufferByteAccess>()->Buffer(&data));
-    return std::vector<BYTE>(data, data + buffer.Length());
-}
-
-// Of `w` x `h` pixels drawn from something `whole` big, the part `rect` covers
-// (both in its own units). `w` and `h` become the part's size.
-std::vector<BYTE> CropPixels(std::vector<BYTE> const& pixels, int& w, int& h, wf::Rect rect,
-                             wf::Size whole) {
-    if (whole.Width <= 0 || whole.Height <= 0 || pixels.size() < (size_t)w * h * 4) {
-        w = h = 0;
-        return {};
-    }
-    float fx = w / whole.Width, fy = h / whole.Height;
-    int x0 = std::clamp((int)std::floor(rect.X * fx), 0, w);
-    int y0 = std::clamp((int)std::floor(rect.Y * fy), 0, h);
-    int x1 = std::clamp((int)std::ceil((rect.X + rect.Width) * fx), 0, w);
-    int y1 = std::clamp((int)std::ceil((rect.Y + rect.Height) * fy), 0, h);
-    if (x1 <= x0 || y1 <= y0) {
-        w = h = 0;
-        return {};
-    }
-    int cw = x1 - x0, ch = y1 - y0;
-    std::vector<BYTE> out((size_t)cw * ch * 4);
-    for (int y = 0; y < ch; y++) {
-        memcpy(&out[(size_t)y * cw * 4], &pixels[((size_t)(y0 + y) * w + x0) * 4], (size_t)cw * 4);
-    }
-    w = cw;
-    h = ch;
-    return out;
-}
-
-// Three box blurs, close to a Gaussian blur with standard deviation `sigma`.
-void Blur(std::vector<float>& v, int w, int h, float sigma) {
-    int r = (int)std::lround((std::sqrt(4 * sigma * sigma + 1) - 1) / 2);
-    if (r < 1) return;
-    std::vector<float> tmp(v.size());
-    auto pass = [r](float const* src, float* dst, int lines, int length, int step, int lineStep) {
-        for (int line = 0; line < lines; line++) {
-            float const* s = src + (size_t)line * lineStep;
-            float* d = dst + (size_t)line * lineStep;
-            float sum = 0;
-            for (int k = -r; k <= r; k++) sum += s[std::clamp(k, 0, length - 1) * step];
-            for (int i = 0; i < length; i++) {
-                d[i * step] = sum / (2 * r + 1);
-                sum += s[std::min(i + r + 1, length - 1) * step] - s[std::max(i - r, 0) * step];
-            }
-        }
-    };
-    for (int i = 0; i < 3; i++) {
-        pass(v.data(), tmp.data(), h, w, 1, w);  // rows
-        pass(tmp.data(), v.data(), w, h, w, 1);  // columns
-    }
-}
-
-// `r`, `g`, `b` at `a` over a premultiplied BGRA pixel.
-void Overlay(BYTE* p, uint8_t r, uint8_t g, uint8_t b, float a) {
-    p[0] = (BYTE)std::lround(b * a + p[0] * (1 - a));
-    p[1] = (BYTE)std::lround(g * a + p[1] * (1 - a));
-    p[2] = (BYTE)std::lround(r * a + p[2] * (1 - a));
-    p[3] = (BYTE)std::lround(255 * a + p[3] * (1 - a));
-}
-
-// `shape` (`w` by `h`) moved `distance` pixels along (`ux`, `uy`), a unit step
-// along one axis; a fraction mixes the two nearest pixels.
-std::vector<float> MovedShape(std::vector<float> const& shape, int w, int h, int ux, int uy,
-                              float distance) {
-    int whole = (int)distance;
-    float part = distance - whole;
-    auto at = [&](int x, int y) {
-        return x >= 0 && y >= 0 && x < w && y < h ? shape[(size_t)y * w + x] : 0.0f;
-    };
-    std::vector<float> moved(shape.size());
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            moved[(size_t)y * w + x] = at(x - ux * whole, y - uy * whole) * (1 - part) +
-                                       at(x - ux * (whole + 1), y - uy * (whole + 1)) * part;
-        }
-    }
-    return moved;
-}
-
-// ---- Inner edges ----
-// A glow or shadow along one side of a shape is an inner shadow: the shape
-// moved in from that side by a share of the edge's reach, and softened,
-// leaving the gap to be colored. So it follows the shape's corners round, and
-// fades out with no visible end. Squircle tiles, the MacOS Style border and
-// the labels all have them.
-
-constexpr float kInnerEdgeShift = 0.4f;     // how far in the shape is moved, of the reach
-constexpr float kInnerEdgeSoftness = 0.2f;  // how much it's softened, of the reach
-
-// Which way each side's shadow is cast, as a step in x and y: top, bottom,
-// left, right.
-constexpr int kInward[4][2] = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}};
-
-// A glow or shadow along one side of a shape: `reach` pixels in from its edge.
-struct InnerEdge {
-    Color color;
-    float opacity = 0;  // 0-1
-    float reach = 0;    // none at 0
-};
-
-// `edges` (top, bottom, left, right) over the shape in `pixels` (`w` by `h`),
-// which covers `shape`.
-void ApplyInnerEdges(std::vector<BYTE>& pixels, int w, int h, std::vector<float> const& shape,
-                     std::array<InnerEdge, 4> const& edges) {
-    for (size_t side = 0; side < edges.size(); side++) {
-        InnerEdge const& edge = edges[side];
-        if (edge.opacity <= 0 || edge.reach <= 0) continue;
-        auto [cx, cy] = kInward[side];
-        std::vector<float> moved = MovedShape(shape, w, h, cx, cy, edge.reach * kInnerEdgeShift);
-        Blur(moved, w, h, edge.reach * kInnerEdgeSoftness);
-        auto [_, r, g, b] = edge.color;
-        for (size_t i = 0; i < shape.size(); i++) {
-            float a = edge.opacity * shape[i] * std::clamp(1 - moved[i], 0.0f, 1.0f);
-            if (a > 0) Overlay(&pixels[i * 4], r, g, b, a);
-        }
-    }
-}
-
-// `top` over `pixels`, both `count` pixels.
-void DrawOver(BYTE* pixels, BYTE const* top, size_t count) {
-    for (size_t i = 0; i < count * 4; i += 4) {
-        int rest = 255 - top[i + 3];
-        if (rest == 255) continue;
-        for (int c = 0; c < 4; c++) {
-            pixels[i + c] = (BYTE)std::min(255, top[i + c] + (pixels[i + c] * rest + 127) / 255);
-        }
-    }
-}
-
-// =============================================================================
-// IMAGES
-// =============================================================================
-// Image files (PNG, .icns, or anything else Windows reads) and the shell's
-// icons, as pixels.
-
-constexpr GUID kWICImagingFactoryId = {
-    0xcacaf262, 0x9370, 0x4615, {0xa1, 0x3b, 0x9f, 0x55, 0x39, 0xda, 0x4c, 0x0a}};
-constexpr GUID kIWICImagingFactoryId = {
-    0xec5ec8a9, 0xc395, 0x4314, {0x9c, 0x77, 0x54, 0xd7, 0xa9, 0x35, 0xff, 0x70}};
-constexpr GUID kWICPixelFormat32bppPBGRA = {
-    0x6fddc324, 0x4e03, 0x4bfe, {0xb1, 0x85, 0x3d, 0x77, 0x76, 0x8d, 0xc9, 0x10}};
-constexpr auto kWICHighQualityCubic = (WICBitmapInterpolationMode)4;
 
 // ---- Mac .icns files ----
 // "icns" and the file's length, then entries: each a 4-letter type, its length
@@ -2451,677 +2090,6 @@ wuxm::ImageSource LoadImageFile(std::wstring const& path, int px) {
     return result;
 }
 
-// ---- The shell's icons ----
-
-// IShellItemImageFactory, without linking uuid.lib.
-constexpr GUID kIShellItemImageFactoryId = {
-    0xbcc18b79, 0xba16, 0x442f, {0x80, 0xc4, 0x8a, 0x59, 0xc3, 0x0c, 0x46, 0x3b}};
-
-// An `px` pixel icon of `name` (a shell path) from the shell, as premultiplied
-// BGRA, top row first; empty if there's none.
-std::vector<BYTE> ShellIconPixels(std::wstring const& name, int px, int& w, int& h) {
-    winrt::com_ptr<IShellItemImageFactory> factory;
-    if (FAILED(SHCreateItemFromParsingName(name.c_str(), nullptr, kIShellItemImageFactoryId,
-                                           factory.put_void()))) {
-        return {};
-    }
-    HBITMAP bitmap = nullptr;
-    if (FAILED(factory->GetImage({px, px}, (SIIGBF)(SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK), &bitmap)) ||
-        !bitmap) {
-        return {};
-    }
-    std::vector<BYTE> pixels;
-    BITMAP bm{};
-    if (GetObject(bitmap, sizeof(bm), &bm) && bm.bmWidth > 0 && bm.bmHeight > 0) {
-        BITMAPINFO bi{};
-        bi.bmiHeader = {sizeof(BITMAPINFOHEADER), bm.bmWidth, -bm.bmHeight, 1, 32, BI_RGB};
-        pixels.resize((size_t)bm.bmWidth * bm.bmHeight * 4);
-        HDC dc = GetDC(nullptr);
-        if (GetDIBits(dc, bitmap, 0, bm.bmHeight, pixels.data(), &bi, DIB_RGB_COLORS) !=
-            bm.bmHeight) {
-            pixels.clear();
-        }
-        ReleaseDC(nullptr, dc);
-    }
-    DeleteObject(bitmap);
-    if (pixels.empty()) return {};
-
-    // Usually premultiplied already; with no alpha at all, it's opaque.
-    bool anyAlpha = false, straight = false;
-    for (size_t i = 0; i < pixels.size(); i += 4) {
-        BYTE a = pixels[i + 3];
-        anyAlpha |= a != 0;
-        straight |= pixels[i] > a || pixels[i + 1] > a || pixels[i + 2] > a;
-    }
-    for (size_t i = 0; i < pixels.size(); i += 4) {
-        if (!anyAlpha) {
-            pixels[i + 3] = 255;
-        } else if (straight) {
-            BYTE a = pixels[i + 3];
-            for (int c = 0; c < 3; c++) pixels[i + c] = (BYTE)(pixels[i + c] * a / 255);
-        }
-    }
-    w = bm.bmWidth;
-    h = bm.bmHeight;
-    return pixels;
-}
-
-// =============================================================================
-// SHAPES
-// =============================================================================
-// An outline is closed: a start point, then cubic curves as three points each
-// (a straight line repeats its end). The dock's and the tray's backgrounds,
-// icon tiles and the labels' bubbles are all drawn from outlines.
-
-using Outline = std::vector<wf::Point>;
-
-// ---- Squircle ----
-
-// Apple's continuous corner, as PaintCode measured it: a near-circular arc eased
-// into the straight edges by Béziers. Points are (along the edge in, along the
-// edge out) from the corner, in radii. After the first, each three are a cubic
-// curve; a straight line repeats its end.
-constexpr float kCornerReach = 1.52866f;
-constexpr float kCorner[16][2] = {
-    {kCornerReach, 0},
-    {1.08849f, 0}, {0.86841f, 0}, {0.66993f, 0.06550f},
-    {0.66993f, 0.06550f}, {0.63149f, 0.07491f}, {0.63149f, 0.07491f},
-    {0.37282f, 0.16906f}, {0.16906f, 0.37282f}, {0.07491f, 0.63149f},
-    {0.07491f, 0.63149f}, {0.06550f, 0.66993f}, {0.06550f, 0.66993f},
-    {0, 0.86841f}, {0, 1.08849f}, {0, kCornerReach},
-};
-
-// The largest corner radius up to `r` that fits a `w` x `h` box.
-float SquircleRadius(float w, float h, float r) {
-    return std::clamp(std::min(w, h) / 2 / kCornerReach, 0.0f, r);
-}
-
-// A closed outline: a start point, then cubic curves as three points each.
-Outline Squircle(float x, float y, float w, float h, float rx, float ry) {
-    struct Corner { float x, y, inX, inY, outX, outY; };
-    Corner corners[] = {{x + w, y, -1, 0, 0, 1}, {x + w, y + h, 0, -1, -1, 0},
-                        {x, y + h, 1, 0, 0, -1}, {x, y, 0, 1, 1, 0}};
-    Outline points;
-    for (auto& c : corners) {
-        for (int i = 0; i < 16; i++) {
-            auto [in, out] = kCorner[i];
-            wf::Point point{c.x + (in * c.inX + out * c.outX) * rx,
-                            c.y + (in * c.inY + out * c.outY) * ry};
-            if (i == 0 && !points.empty()) {
-                points.insert(points.end(), {points.back(), point});  // the straight edge
-            }
-            points.push_back(point);
-        }
-    }
-    return points;
-}
-
-wuxm::PathGeometry SquircleGeometry(std::initializer_list<Outline> outlines) {
-    wuxm::PathGeometry geometry;
-    geometry.FillRule(wuxm::FillRule::EvenOdd);
-    for (auto& points : outlines) {
-        wuxm::PolyBezierSegment curves;
-        for (size_t i = 1; i < points.size(); i++) curves.Points().Append(points[i]);
-        wuxm::PathFigure figure;
-        figure.StartPoint(points[0]);
-        figure.IsClosed(true);
-        figure.Segments().Append(curves);
-        geometry.Figures().Append(figure);
-    }
-    return geometry;
-}
-
-// ---- Lines and plain corners ----
-
-// Builds an outline from lines, quarter circles and curves.
-struct OutlineBuilder {
-    Outline points;
-
-    void Start(wf::Point p) { points = {p}; }
-    void CurveTo(wf::Point c1, wf::Point c2, wf::Point p) {
-        points.insert(points.end(), {c1, c2, p});
-    }
-    void LineTo(wf::Point p) {
-        if (!At(p)) CurveTo(points.back(), p, p);
-    }
-    // A quarter circle to `p`, round the corner at `corner`.
-    void ArcTo(wf::Point corner, wf::Point p) {
-        constexpr float kQuarter = 0.5522848f;  // how far toward the corner its curve bends
-        if (!At(p)) {
-            CurveTo(Toward(points.back(), corner, kQuarter), Toward(p, corner, kQuarter), p);
-        }
-    }
-    // A curve to `p`, bent toward `corner`: a quadratic curve, as a cubic one.
-    void BendTo(wf::Point corner, wf::Point p) {
-        CurveTo(Toward(points.back(), corner, 2.0f / 3), Toward(p, corner, 2.0f / 3), p);
-    }
-
-private:
-    bool At(wf::Point p) const { return points.back().X == p.X && points.back().Y == p.Y; }
-    static wf::Point Toward(wf::Point from, wf::Point to, float share) {
-        return {from.X + (to.X - from.X) * share, from.Y + (to.Y - from.Y) * share};
-    }
-};
-
-// The box at (`x`, `y`), `w` by `h`, with plain circular corners of radius
-// `r`; square ones at 0.
-Outline RoundedRect(float x, float y, float w, float h, float r) {
-    OutlineBuilder box;
-    box.Start({x, y + r});
-    box.ArcTo({x, y}, {x + r, y});
-    box.LineTo({x + w - r, y});
-    box.ArcTo({x + w, y}, {x + w, y + r});
-    box.LineTo({x + w, y + h - r});
-    box.ArcTo({x + w, y + h}, {x + w - r, y + h});
-    box.LineTo({x + r, y + h});
-    box.ArcTo({x, y + h}, {x, y + h - r});
-    return box.points;
-}
-
-// =============================================================================
-// DIRECT2D
-// =============================================================================
-// Everything the dock draws for itself is drawn here, into pictures in memory:
-// outlines filled, lines stroked and pictures resized (and, in LABELS, text).
-//
-// These shapes were first drawn with GDI+, which puts a shape half a pixel
-// right of and below where Direct2D does. They're kept there (kShapeOffset),
-// so their edges are exactly as soft as they always were.
-
-constexpr float kShapeOffset = 0.5f;
-const auto kD2DHighQualityCubic = (D2D1_INTERPOLATION_MODE)5;  // D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC
-
-winrt::com_ptr<ID2D1Factory> g_d2d;
-winrt::com_ptr<ID2D1DCRenderTarget> g_canvasTarget;  // draws every Canvas, one at a time
-bool g_cubicResize = true;  // pictures are resized with Direct2D's best filter, while it works
-
-// Direct2D's factory, made the first time it's needed.
-ID2D1Factory* D2DFactory() {
-    if (!g_d2d) {
-        winrt::check_hresult(D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED,
-                                               __uuidof(ID2D1Factory), nullptr, g_d2d.put_void()));
-    }
-    return g_d2d.get();
-}
-
-// Let go of as the mod unloads.
-void ReleaseDirect2D() {
-    g_canvasTarget = nullptr;
-    g_d2d = nullptr;
-}
-
-D2D1_MATRIX_3X2_F D2DTranslation(float x, float y) {
-    D2D1_MATRIX_3X2_F m{};
-    m._11 = m._22 = 1;
-    m._31 = x;
-    m._32 = y;
-    return m;
-}
-
-D2D1_COLOR_F D2DColor(Color c) {
-    return D2D1::ColorF(c.R / 255.0f, c.G / 255.0f, c.B / 255.0f, c.A / 255.0f);
-}
-
-// The box at (`x`, `y`), `w` by `h`.
-D2D1_RECT_F D2DBox(float x, float y, float w, float h) {
-    return {x, y, x + w, y + h};
-}
-
-// An outline as a Direct2D path, moved by (`dx`, `dy`).
-winrt::com_ptr<ID2D1PathGeometry> OutlineGeometry(Outline const& points, float dx = 0,
-                                                  float dy = 0) {
-    winrt::com_ptr<ID2D1PathGeometry> path;
-    winrt::check_hresult(D2DFactory()->CreatePathGeometry(path.put()));
-    winrt::com_ptr<ID2D1GeometrySink> sink;
-    winrt::check_hresult(path->Open(sink.put()));
-    auto at = [&](size_t i) { return D2D1_POINT_2F{points[i].X + dx, points[i].Y + dy}; };
-    sink->BeginFigure(at(0), D2D1_FIGURE_BEGIN_FILLED);
-    for (size_t i = 1; i + 2 < points.size(); i += 3) sink->AddBezier({at(i), at(i + 1), at(i + 2)});
-    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-    winrt::check_hresult(sink->Close());
-    return path;
-}
-
-// ---- Canvas ----
-
-// A picture in memory that Direct2D draws into, and code reads and writes
-// directly: premultiplied BGRA, top row first, clear to begin with. It has a
-// device context too, for a layered window to take its picture from.
-class Canvas {
-public:
-    Canvas(int width, int height) : width_(width), height_(height) {
-        BITMAPINFO info{};
-        info.bmiHeader = {sizeof(BITMAPINFOHEADER), width, -height, 1, 32, BI_RGB};
-        void* bits = nullptr;
-        HDC screen = GetDC(nullptr);
-        dc_ = CreateCompatibleDC(screen);
-        if (dc_) bitmap_ = CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
-        ReleaseDC(nullptr, screen);
-        if (!bitmap_) return;
-        previous_ = SelectObject(dc_, bitmap_);
-        pixels_ = (BYTE*)bits;
-    }
-    Canvas(Canvas const&) = delete;
-    Canvas& operator=(Canvas const&) = delete;
-    ~Canvas() {
-        if (previous_) SelectObject(dc_, previous_);
-        if (bitmap_) DeleteObject(bitmap_);
-        if (dc_) DeleteDC(dc_);
-    }
-
-    explicit operator bool() const { return pixels_ != nullptr; }
-    int Width() const { return width_; }
-    int Height() const { return height_; }
-    size_t PixelCount() const { return (size_t)width_ * height_; }
-    BYTE* Pixels() const { return pixels_; }
-    HDC Dc() const { return dc_; }
-
-    // Draws with Direct2D, over what's there already, by calling
-    // draw(ID2D1RenderTarget*). Throws if it fails.
-    template <typename F>
-    void Draw(F&& draw) {
-        if (!pixels_) winrt::throw_hresult(E_OUTOFMEMORY);
-        auto& target = g_canvasTarget;
-        if (!target) {
-            auto props = D2D1::RenderTargetProperties(
-                D2D1_RENDER_TARGET_TYPE_SOFTWARE,
-                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
-            winrt::check_hresult(D2DFactory()->CreateDCRenderTarget(&props, target.put()));
-            // No ClearType: the pictures' alpha is their own.
-            target->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
-        }
-        RECT box{0, 0, width_, height_};
-        GdiFlush();
-        winrt::check_hresult(target->BindDC(dc_, &box));
-        target->BeginDraw();
-        HRESULT hr = S_OK;
-        try {
-            ID2D1RenderTarget* onto = target.get();
-            draw(onto);
-        } catch (...) {
-            hr = winrt::to_hresult();
-        }
-        HRESULT ended = target->EndDraw();
-        GdiFlush();
-        if (FAILED(ended)) target = nullptr;  // made again next time
-        winrt::check_hresult(FAILED(hr) ? hr : ended);
-    }
-
-private:
-    int width_, height_;
-    HDC dc_ = nullptr;
-    HBITMAP bitmap_ = nullptr;
-    HGDIOBJ previous_ = nullptr;
-    BYTE* pixels_ = nullptr;
-};
-
-// ---- Drawing ----
-
-// `pixels` (`w` by `h`) as a picture `target` can draw.
-winrt::com_ptr<ID2D1Bitmap> D2DPicture(ID2D1RenderTarget* target, BYTE const* pixels, int w,
-                                       int h) {
-    D2D1_BITMAP_PROPERTIES props{{DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED}, 96,
-                                 96};
-    winrt::com_ptr<ID2D1Bitmap> picture;
-    winrt::check_hresult(target->CreateBitmap(D2D1_SIZE_U{(UINT32)w, (UINT32)h}, pixels,
-                                              (UINT32)w * 4, &props, picture.put()));
-    return picture;
-}
-
-// The part `from` of a `w` by `h` picture, drawn into `to`, resized with the
-// best filter there is.
-void DrawPicture(ID2D1RenderTarget* target, BYTE const* pixels, int w, int h, D2D1_RECT_F from,
-                 D2D1_RECT_F to) {
-    auto picture = D2DPicture(target, pixels, w, h);
-    winrt::com_ptr<ID2D1DeviceContext> context;
-    target->QueryInterface(__uuidof(ID2D1DeviceContext), context.put_void());
-    if (context && g_cubicResize) {
-        context->DrawBitmap(picture.get(), &to, 1.0f, kD2DHighQualityCubic, &from, nullptr);
-    } else {
-        target->DrawBitmap(picture.get(), &to, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &from);
-    }
-}
-
-// Runs `draw`, which resizes pictures. If it fails with Direct2D's best filter,
-// it's run once more with the plain one, which is used from then on.
-template <typename F>
-bool TryResizing(F&& draw, PCWSTR what) {
-    if (Try(draw, what)) return true;
-    if (!g_cubicResize) return false;
-    g_cubicResize = false;
-    Wh_Log(L"Resizing with Direct2D's plain filter from now on");
-    return Try(draw, what);
-}
-
-// `outline` filled with `color`.
-void FillOutline(ID2D1RenderTarget* target, Outline const& outline, Color color) {
-    winrt::com_ptr<ID2D1SolidColorBrush> brush;
-    winrt::check_hresult(target->CreateSolidColorBrush(D2DColor(color), brush.put()));
-    target->FillGeometry(OutlineGeometry(outline, kShapeOffset, kShapeOffset).get(), brush.get(),
-                         nullptr);
-}
-
-// `outline` filled with a `w` by `h` picture whose corner is at (`x`, `y`),
-// mirrored past its edges.
-void FillOutlineWithPicture(ID2D1RenderTarget* target, Outline const& outline,
-                            BYTE const* pixels, int w, int h, float x, float y) {
-    auto picture = D2DPicture(target, pixels, w, h);
-    D2D1_BITMAP_BRUSH_PROPERTIES tiling{D2D1_EXTEND_MODE_MIRROR, D2D1_EXTEND_MODE_MIRROR,
-                                        D2D1_BITMAP_INTERPOLATION_MODE_LINEAR};
-    D2D1_BRUSH_PROPERTIES placing{1.0f, D2DTranslation(x, y)};
-    winrt::com_ptr<ID2D1BitmapBrush> brush;
-    winrt::check_hresult(
-        target->CreateBitmapBrush(picture.get(), &tiling, &placing, brush.put()));
-    target->FillGeometry(OutlineGeometry(outline, kShapeOffset, kShapeOffset).get(), brush.get(),
-                         nullptr);
-}
-
-// A line through `points`, `width` wide, in `color`: with round ends and
-// corners, or square ones.
-void StrokeLine(ID2D1RenderTarget* target, std::initializer_list<wf::Point> points, Color color,
-                float width, bool round) {
-    winrt::com_ptr<ID2D1PathGeometry> path;
-    winrt::check_hresult(D2DFactory()->CreatePathGeometry(path.put()));
-    winrt::com_ptr<ID2D1GeometrySink> sink;
-    winrt::check_hresult(path->Open(sink.put()));
-    auto at = [](wf::Point p) { return D2D1_POINT_2F{p.X + kShapeOffset, p.Y + kShapeOffset}; };
-    auto point = points.begin();
-    sink->BeginFigure(at(*point), D2D1_FIGURE_BEGIN_HOLLOW);
-    for (auto last = point++; point != points.end(); last = point++) {
-        sink->AddBezier({at(*last), at(*point), at(*point)});  // a straight line
-    }
-    sink->EndFigure(D2D1_FIGURE_END_OPEN);
-    winrt::check_hresult(sink->Close());
-
-    winrt::com_ptr<ID2D1StrokeStyle> style;  // none for square ends and corners
-    if (round) {
-        D2D1_STROKE_STYLE_PROPERTIES props{D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
-                                           D2D1_CAP_STYLE_ROUND, D2D1_LINE_JOIN_ROUND,
-                                           10.0f,                D2D1_DASH_STYLE_SOLID,
-                                           0.0f};
-        winrt::check_hresult(D2DFactory()->CreateStrokeStyle(&props, nullptr, 0, style.put()));
-    }
-    winrt::com_ptr<ID2D1SolidColorBrush> brush;
-    winrt::check_hresult(target->CreateSolidColorBrush(D2DColor(color), brush.put()));
-    target->DrawGeometry(path.get(), brush.get(), width, style.get());
-}
-
-// How much of each pixel of a `w` by `h` picture `outline` covers.
-std::vector<float> OutlineCoverage(Outline const& outline, int w, int h) {
-    Canvas canvas(w, h);
-    canvas.Draw([&](ID2D1RenderTarget* target) {
-        FillOutline(target, outline, Color{255, 0, 0, 0});
-    });
-    std::vector<float> coverage(canvas.PixelCount());
-    BYTE const* pixels = canvas.Pixels();
-    for (size_t i = 0; i < coverage.size(); i++) coverage[i] = pixels[i * 4 + 3] / 255.0f;
-    return coverage;
-}
-
-// =============================================================================
-// COMPOSITION
-// =============================================================================
-// What Windows' compositor draws for the dock, live: the frosted blur of
-// what's behind it, held within a brightness limit and clipped to its outline.
-
-// ---- Effects ----
-// Described directly, as Explorer doesn't ship Win2D.
-
-enum DOCK_EFFECT_PROPERTY_MAPPING : int {
-    DOCK_EFFECT_PROPERTY_MAPPING_DIRECT = 1,
-};
-
-MIDL_INTERFACE("2FC57384-A068-44D7-A331-30982FCF7177")
-IDockGraphicsEffectD2D1Interop : public IUnknown {
-public:
-    virtual HRESULT STDMETHODCALLTYPE GetEffectId(GUID* id) = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetNamedPropertyMapping(
-        LPCWSTR name, UINT* index, DOCK_EFFECT_PROPERTY_MAPPING* mapping) = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetPropertyCount(UINT* count) = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetProperty(UINT index, void** value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetSource(UINT index, void** source) = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetSourceCount(UINT* count) = 0;
-};
-__CRT_UUID_DECL(IDockGraphicsEffectD2D1Interop, 0x2fc57384, 0xa068, 0x44d7, 0xa3, 0x31, 0x30,
-                0x98, 0x2f, 0xcf, 0x71, 0x77)
-
-constexpr GUID kGaussianBlurId = {  // CLSID_D2D1GaussianBlur
-    0x1feb6d69, 0x2fe6, 0x4ac9, {0x8c, 0x58, 0x1d, 0x7f, 0x93, 0xe7, 0xa6, 0xa5}};
-
-class GaussianBlurEffect
-    : public winrt::implements<GaussianBlurEffect, wge::IGraphicsEffect,
-                               wge::IGraphicsEffectSource, IDockGraphicsEffectD2D1Interop> {
-public:
-    GaussianBlurEffect(float amount, wge::IGraphicsEffectSource const& source)
-        : m_amount(amount), m_source(source) {}
-
-    winrt::hstring Name() { return m_name; }
-    void Name(winrt::hstring const& name) { m_name = name; }
-
-    HRESULT STDMETHODCALLTYPE GetEffectId(GUID* id) override {
-        *id = kGaussianBlurId;
-        return S_OK;
-    }
-    HRESULT STDMETHODCALLTYPE GetNamedPropertyMapping(
-        LPCWSTR name, UINT* index, DOCK_EFFECT_PROPERTY_MAPPING* mapping) override {
-        if (_wcsicmp(name, L"BlurAmount") != 0) return E_INVALIDARG;
-        *index = 0;
-        *mapping = DOCK_EFFECT_PROPERTY_MAPPING_DIRECT;
-        return S_OK;
-    }
-    HRESULT STDMETHODCALLTYPE GetPropertyCount(UINT* count) override {
-        *count = 3;
-        return S_OK;
-    }
-    HRESULT STDMETHODCALLTYPE GetProperty(UINT index, void** value) override {
-        try {
-            wf::IInspectable v;
-            switch (index) {
-                case 0: v = wf::PropertyValue::CreateSingle(m_amount); break;  // std. deviation
-                case 1: v = wf::PropertyValue::CreateUInt32(1); break;         // balanced
-                case 2: v = wf::PropertyValue::CreateUInt32(1); break;         // hard border
-                default: return E_INVALIDARG;
-            }
-            *value = winrt::detach_abi(v.as<wf::IPropertyValue>());
-            return S_OK;
-        } catch (...) {
-            return winrt::to_hresult();
-        }
-    }
-    HRESULT STDMETHODCALLTYPE GetSource(UINT index, void** source) override {
-        if (index != 0) return E_INVALIDARG;
-        winrt::copy_to_abi(m_source, *source);
-        return S_OK;
-    }
-    HRESULT STDMETHODCALLTYPE GetSourceCount(UINT* count) override {
-        *count = 1;
-        return S_OK;
-    }
-
-private:
-    float m_amount;
-    wge::IGraphicsEffectSource m_source;
-    winrt::hstring m_name;
-};
-
-constexpr GUID kColorMatrixId = {  // CLSID_D2D1ColorMatrix
-    0x921f03d6, 0x641c, 0x47df, {0x85, 0x2d, 0xb4, 0xbb, 0x61, 0x53, 0xae, 0x11}};
-
-// Each color channel scaled by `scale` and moved by `offset`, then with
-// `clamp` held between 0 and 1. Alpha is left alone.
-class ColorMatrixEffect
-    : public winrt::implements<ColorMatrixEffect, wge::IGraphicsEffect,
-                               wge::IGraphicsEffectSource, IDockGraphicsEffectD2D1Interop> {
-public:
-    ColorMatrixEffect(float scale, float offset, bool clamp,
-                      wge::IGraphicsEffectSource const& source)
-        : m_clamp(clamp), m_source(source) {
-        // 5x4, by input: R, G, B, A, then the offsets.
-        m_matrix[0] = m_matrix[5] = m_matrix[10] = scale;
-        m_matrix[15] = 1;
-        m_matrix[16] = m_matrix[17] = m_matrix[18] = offset;
-    }
-
-    winrt::hstring Name() { return m_name; }
-    void Name(winrt::hstring const& name) { m_name = name; }
-
-    HRESULT STDMETHODCALLTYPE GetEffectId(GUID* id) override {
-        *id = kColorMatrixId;
-        return S_OK;
-    }
-    HRESULT STDMETHODCALLTYPE GetNamedPropertyMapping(LPCWSTR, UINT*,
-                                                      DOCK_EFFECT_PROPERTY_MAPPING*) override {
-        return E_INVALIDARG;
-    }
-    HRESULT STDMETHODCALLTYPE GetPropertyCount(UINT* count) override {
-        *count = 3;
-        return S_OK;
-    }
-    HRESULT STDMETHODCALLTYPE GetProperty(UINT index, void** value) override {
-        try {
-            wf::IInspectable v;
-            switch (index) {
-                case 0:
-                    v = wf::PropertyValue::CreateSingleArray(
-                        winrt::array_view<float const>(m_matrix, m_matrix + 20));
-                    break;
-                case 1: v = wf::PropertyValue::CreateUInt32(1); break;  // premultiplied
-                case 2: v = wf::PropertyValue::CreateBoolean(m_clamp); break;
-                default: return E_INVALIDARG;
-            }
-            *value = winrt::detach_abi(v.as<wf::IPropertyValue>());
-            return S_OK;
-        } catch (...) {
-            return winrt::to_hresult();
-        }
-    }
-    HRESULT STDMETHODCALLTYPE GetSource(UINT index, void** source) override {
-        if (index != 0) return E_INVALIDARG;
-        winrt::copy_to_abi(m_source, *source);
-        return S_OK;
-    }
-    HRESULT STDMETHODCALLTYPE GetSourceCount(UINT* count) override {
-        *count = 1;
-        return S_OK;
-    }
-
-private:
-    float m_matrix[20] = {};
-    bool m_clamp;
-    wge::IGraphicsEffectSource m_source;
-    winrt::hstring m_name;
-};
-
-MIDL_INTERFACE("0657AF73-53FD-47CF-84FF-C8492D2A80A3")
-IDockGeometrySource2DInterop : public IUnknown {
-public:
-    virtual HRESULT STDMETHODCALLTYPE GetGeometry(ID2D1Geometry** value) = 0;
-    virtual HRESULT STDMETHODCALLTYPE TryGetGeometryUsingFactory(ID2D1Factory* factory,
-                                                                 ID2D1Geometry** value) = 0;
-};
-__CRT_UUID_DECL(IDockGeometrySource2DInterop, 0x0657af73, 0x53fd, 0x47cf, 0x84, 0xff, 0xc8,
-                0x49, 0x2d, 0x2a, 0x80, 0xa3)
-
-struct GeometrySource
-    : winrt::implements<GeometrySource, wg::IGeometrySource2D, IDockGeometrySource2DInterop> {
-    winrt::com_ptr<ID2D1Geometry> geometry;
-    HRESULT STDMETHODCALLTYPE GetGeometry(ID2D1Geometry** value) override {
-        geometry.copy_to(value);
-        return S_OK;
-    }
-    HRESULT STDMETHODCALLTYPE TryGetGeometryUsingFactory(ID2D1Factory*,
-                                                         ID2D1Geometry** value) override {
-        *value = nullptr;
-        return E_NOTIMPL;
-    }
-};
-
-// An outline for composition, which takes it through Direct2D.
-wuc::CompositionPath SquirclePath(Outline const& points) {
-    auto source = winrt::make_self<GeometrySource>();
-    source->geometry = OutlineGeometry(points);
-    return wuc::CompositionPath(source.as<wg::IGeometrySource2D>());
-}
-
-// ---- Blur ----
-
-// How bright what's behind can show: no brighter than `ceiling`, no darker
-// than `floor`, each color channel 0-1. Neither, at 1 and 0.
-struct ToneLimit {
-    float ceiling = 1, floor = 0;
-    bool Limits() const { return ceiling < 1 || floor > 0; }
-    bool operator==(ToneLimit const&) const = default;
-};
-
-// A brightness limit in percent (100 for none), for what's drawn over it: a
-// ceiling under light marks or text; under dark ones, a floor as far from black
-// as the ceiling is from white.
-ToneLimit ToneFor(int limitPercent, bool lightInk) {
-    ToneLimit tone;
-    float limit = limitPercent / 100.0f;
-    if (limit >= 1) return tone;
-    if (lightInk) tone.ceiling = limit;
-    else tone.floor = 1 - limit;
-    return tone;
-}
-
-// What's behind `host`, blurred by `amount`, held within `tone`, and clipped to
-// the dock's shape, which is returned for ShapeSurface. Nothing, if it does
-// neither. Holding a channel under a ceiling c takes two steps: scaled by 1/c
-// and clipped at 1, then scaled back by c. Above a floor, the same from the
-// other end.
-wuc::CompositionPathGeometry SetBlurVisual(wux::UIElement const& host, float amount,
-                                           ToneLimit tone = {}) {
-    if (amount <= 0 && !tone.Limits()) {
-        wuxh::ElementCompositionPreview::SetElementChildVisual(host, nullptr);
-        return nullptr;
-    }
-    auto hostVisual = wuxh::ElementCompositionPreview::GetElementVisual(host);
-    auto compositor = hostVisual.Compositor();
-
-    wge::IGraphicsEffectSource source = wuc::CompositionEffectSourceParameter(L"Backdrop");
-    wge::IGraphicsEffect effect{nullptr};
-    auto chain = [&](wge::IGraphicsEffect const& next) {
-        effect = next;
-        source = next.as<wge::IGraphicsEffectSource>();
-    };
-    if (amount > 0) chain(winrt::make<GaussianBlurEffect>(amount, source));
-    if (tone.ceiling < 1) {
-        float c = std::max(tone.ceiling, 0.01f);
-        chain(winrt::make<ColorMatrixEffect>(1 / c, 0.0f, true, source));
-        chain(winrt::make<ColorMatrixEffect>(c, 0.0f, false, source));
-    }
-    if (tone.floor > 0) {
-        float room = std::max(1 - tone.floor, 0.01f);  // from the floor up to white
-        chain(winrt::make<ColorMatrixEffect>(-1 / room, 1 / room, true, source));
-        chain(winrt::make<ColorMatrixEffect>(-room, 1.0f, false, source));
-    }
-    auto brush = compositor.CreateEffectFactory(effect).CreateBrush();
-    brush.SetSourceParameter(L"Backdrop", compositor.CreateBackdropBrush());
-
-    auto sprite = compositor.CreateSpriteVisual();
-    sprite.Brush(brush);
-    auto size = compositor.CreateExpressionAnimation(L"host.Size");
-    size.SetReferenceParameter(L"host", hostVisual);
-    sprite.StartAnimation(L"Size", size);
-    auto shape = compositor.CreatePathGeometry();
-    sprite.Clip(compositor.CreateGeometricClip(shape));
-
-    wuxh::ElementCompositionPreview::SetElementChildVisual(host, sprite);
-    return shape;
-}
-
-// #############################################################################
-// PART 3: THE DOCK
-// #############################################################################
-
-// =============================================================================
-// CUSTOM ICONS
-// =============================================================================
-// The user's own Finder, Start and Trash icons, drawn bigger than the icon's
-// spot so their artwork fills it and their margin (a shadow) spills past.
-// Finder and Trash also take those names. Without them, Windows' own.
-
 // Pixels to load an icon drawn `scale` times the icon size at, fully magnified.
 int MagnifiedPixels(wux::UIElement const& el, float scale) {
     double dpiScale = 1;
@@ -3130,6 +2098,11 @@ int MagnifiedPixels(wux::UIElement const& el, float scale) {
     });
     return (int)std::ceil(std::ceil(g_size.icon * g_settings.scale) * scale * dpiScale);
 }
+
+// ---- Finder, Start and Trash ----
+// The user's own icons, drawn bigger than the icon's spot so their artwork fills
+// it and their margin (a shadow) spills past. Finder and Trash also take those
+// names. Without them, Windows' own.
 
 bool HasFinderIcon() { return !g_settings.customFinder.path.empty(); }
 bool HasStartIcon() { return !g_settings.customStart.path.empty(); }
@@ -3180,306 +2153,10 @@ std::wstring TrashPath(bool full) {
 }
 
 // =============================================================================
-// SURFACE
-// =============================================================================
-// A background like the dock's, as layers in a grid: blur, color, and a
-// border: a line, or the MacOS Style border's lines and glows. The dock's
-// plate has one, and so does the tray.
-
-constexpr float kMaxBlur = 60;                  // Blur 50 = 30, like Windows' acrylic
-constexpr float kEdgeHighlight = 0.7f;          // a light edge, and blank glows: this far to white
-constexpr float kEdgeShadow = 0.7f;             // a dark edge: this far to black
-constexpr float kDividerOpacity = 0.75f;        // of the dots' opacity
-constexpr float kEdgeHighlightOpacity = 0.5f;   // a light edge, of the edges' opacity
-constexpr float kEdgeMinOpacity = 0.20f;        // edge opacity at dock Opacity 0...
-constexpr float kEdgeMaxOpacity = 0.65f;        // ...rising to this at kEdgeMaxOpacityAt
-constexpr int kEdgeMaxOpacityAt = 30;
-constexpr float kMarkDarkLightness = 0.05f;   // dividers and dots on a light dock
-constexpr float kMarkLightLightness = 0.9f;   // dividers and dots on a dark dock
-constexpr uint8_t kMarkAlphaOnLight = 200;
-constexpr uint8_t kMarkAlphaOnDark = 125;
-constexpr uint8_t kStandardEdgeAlphaOnLight = 135;
-
-struct Surface {
-    wuxc::Grid root{nullptr};
-    wuxc::Border blurHost{nullptr};
-    wuxs::Path fill{nullptr}, edgeInner{nullptr}, edgeOuter{nullptr};
-    // The MacOS Style border, drawn as a picture in three slices (see
-    // DrawMacBorder): its ends, and its middle stretched between them.
-    wuxc::Grid mac{nullptr};
-    wuxc::Image macLeft{nullptr}, macMiddle{nullptr}, macRight{nullptr};
-    bool macShown = false;
-    Color macFill{};               // the background it's drawn for
-    uint8_t macLineAlpha = 0;      // its dark lines'; the light ones are half
-    std::wstring macDrawn;         // what it was last drawn for
-    wuc::CompositionPathGeometry blurShape{nullptr};
-    float appliedBlur = -1;
-    ToneLimit appliedTone;
-    // Liquid Glass, drawn in blurHost in place of the blur (the dock's only;
-    // see LIQUID GLASS).
-    bool glassShown = false;
-    wuc::CompositionPathGeometry glassShape{nullptr};  // its clip
-};
-
-// Its layers in drawing order, in a new grid, unrounded so the right edge
-// doesn't wobble. Not hit-testable. The caller places s.root.
-void BuildSurface(Surface& s) {
-    s.root = wuxc::Grid();
-    s.blurHost = wuxc::Border();
-    s.fill = wuxs::Path();
-    s.edgeInner = wuxs::Path();
-    s.edgeOuter = wuxs::Path();
-    s.root.IsHitTestVisible(false);
-    s.root.UseLayoutRounding(false);
-
-    s.mac = wuxc::Grid();
-    s.mac.Visibility(Visibility::Collapsed);
-    for (auto width : {wux::GridLengthHelper::Auto(), wux::GridLengthHelper::FromValueAndType(
-                                                          1, wux::GridUnitType::Star),
-                       wux::GridLengthHelper::Auto()}) {
-        wuxc::ColumnDefinition column;
-        column.Width(width);
-        s.mac.ColumnDefinitions().Append(column);
-    }
-    int i = 0;
-    for (auto* image : {&s.macLeft, &s.macMiddle, &s.macRight}) {
-        *image = wuxc::Image();
-        image->Stretch(wuxm::Stretch::Fill);
-        image->UseLayoutRounding(false);
-        wuxc::Grid::SetColumn(*image, i++);
-        s.mac.Children().Append(*image);
-    }
-
-    for (wux::FrameworkElement layer : std::initializer_list<wux::FrameworkElement>{
-             s.blurHost, s.fill, s.mac, s.edgeInner, s.edgeOuter}) {
-        layer.UseLayoutRounding(false);
-        s.root.Children().Append(layer);
-    }
-}
-
-void RemoveSurfaceBlur(Surface& s) {
-    if (s.blurHost) {
-        Try([&] { wuxh::ElementCompositionPreview::SetElementChildVisual(s.blurHost, nullptr); });
-    }
-    s.blurShape = nullptr;
-    s.appliedBlur = -1;
-    s.appliedTone = {};
-    s.glassShown = false;  // its visual went with the blur's
-}
-
-// The color behind `look`'s icons, and whether it's light. With System, or no
-// background, light follows `systemLight`. With no background, the color it
-// would have, which its edges and glow are drawn from.
-Color LookFill(Look const& look, bool systemLight, bool& light) {
-    uint8_t alpha = (uint8_t)(look.opacity * 255 / 100);
-    light = look.background == Background::Light;
-    if (look.background == Background::System || look.background == Background::None) {
-        light = systemLight;
-    }
-    if (look.background == Background::Custom) {
-        auto [r, g, b] = look.color;
-        light = IsLightColor(r, g, b);
-        return Color{alpha, r, g, b};
-    }
-    return light ? Color{alpha, 0xCC, 0xCC, 0xCC} : Color{alpha, 0x33, 0x33, 0x33};
-}
-
-// Dividers and dots: dark on a light background, light on a dark one.
-Color MarkColor(Color fill, bool light) {
-    Color mark = ShiftLightness(
-        fill, (light ? kMarkDarkLightness : kMarkLightLightness) - Lightness(fill));
-    mark.A = light ? kMarkAlphaOnLight : kMarkAlphaOnDark;
-    return mark;
-}
-
-// Frosted glass, in `fill` (from LookFill), with `look`'s border; what's seen
-// through it held within `tone`.
-void ApplySurfaceLook(Surface& s, Look const& look, Color fill, bool light,
-                      ToneLimit tone = {}) {
-    bool none = look.background == Background::None;
-    s.fill.Fill(none ? nullptr : wuxm::SolidColorBrush(fill));
-    s.edgeInner.Fill(nullptr);
-    s.edgeOuter.Fill(nullptr);
-    s.macShown = look.border == Border::Mac;
-    s.mac.Visibility(s.macShown ? Visibility::Visible : Visibility::Collapsed);
-    auto scaled = [](uint8_t alpha, int percent) {
-        return (uint8_t)std::lround(alpha * percent / 100.0f);
-    };
-
-    if (look.border == Border::Standard) {
-        // A solid edge in the dividers' color, softer on a light background.
-        Color line = MarkColor(fill, light);
-        if (light) line.A = kStandardEdgeAlphaOnLight;
-        line.A = scaled(line.A, look.borderOpacity);
-        s.edgeInner.Fill(wuxm::SolidColorBrush(line));
-    } else if (look.border == Border::Custom) {
-        auto [r, g, b] = look.borderColor;
-        s.edgeInner.Fill(wuxm::SolidColorBrush(Color{scaled(255, look.borderOpacity), r, g, b}));
-    } else if (look.border == Border::Mac) {
-        // Drawn as the surface is shaped (see DrawMacBorder), its lines stronger
-        // on a more opaque background.
-        float t = std::clamp((float)look.opacity / kEdgeMaxOpacityAt, 0.0f, 1.0f);
-        s.macLineAlpha =
-            (uint8_t)std::lround(255 * (kEdgeMinOpacity + (kEdgeMaxOpacity - kEdgeMinOpacity) * t));
-        s.macFill = fill;
-    }
-
-    float blur = none ? 0 : look.blur * kMaxBlur / 100;
-    if (s.glassShown) return;  // Liquid Glass is in its place
-    if (blur != s.appliedBlur || !(tone == s.appliedTone)) {
-        s.appliedBlur = blur;
-        s.appliedTone = tone;
-        s.blurShape = nullptr;
-        Try([&] { s.blurShape = SetBlurVisual(s.blurHost, blur, tone); }, L"Blur");
-    }
-}
-
-// ---- MacOS Style border ----
-// The dock's, and the tray's: each side's glow or shadow, as set, drawn as
-// squircle tiles' edges are, so it follows the corners round; and a thin line
-// along each edge, light inside one that glows, faintly dark outside any
-// other. It's drawn at the screen's scale for a short surface, a pixel bigger
-// all round for the lines outside. Past its corners it doesn't change along
-// its length, so it's shown in three slices: its two ends, and a column from
-// its middle stretched between them. As the dock widens while it magnifies,
-// nothing is drawn again.
-
-// For a surface `w` by `h` (view pixels) with corners `r` (as ShapeSurface
-// has them), its glows sized by `reference`; drawn again only when that or
-// its look changes.
-void DrawMacBorder(Surface& s, float w, float h, float r, float reference) {
-    float k = 1;
-    if (auto root = s.root.XamlRoot()) k = (float)root.RasterizationScale();
-    Color fill = s.macFill;
-    float fillLightness = Lightness(fill);
-    Color lighter = ShiftLightness(fill, (1 - fillLightness) * kEdgeHighlight);
-    Color darker = ShiftLightness(fill, -fillLightness * kEdgeShadow);
-    lighter.A = darker.A = 255;
-
-    // Each side's glow, in view pixels, and whether it's light.
-    std::array<InnerEdge, 4> glows;
-    std::array<bool, 4> light{};
-    for (size_t side = 0; side < glows.size(); side++) {
-        DockEdge const& edge = g_settings.dockEdges[side];
-        Color color = edge.lighter ? lighter : Color{255, edge.color[0], edge.color[1], edge.color[2]};
-        glows[side] = {color, edge.opacity / 100.0f, edge.size / 100.0f * reference};
-        light[side] = glows[side].opacity > 0 && glows[side].reach > 0 &&
-                      Lightness(color) >= fillLightness;
-    }
-
-    // How far in from each end it changes: the corners, and the top and bottom
-    // glows' softening around them, or the sides' glows, whichever's further.
-    float reachTB = std::max(glows[0].reach, glows[1].reach);
-    float reachLR = std::max(glows[2].reach, glows[3].reach);
-    float end = std::max(kCornerReach * r + reachTB * (kInnerEdgeShift + 3 * kInnerEdgeSoftness),
-                         reachLR) + 2;
-    int pad = std::max(1, (int)std::ceil(k));  // a view pixel, for the lines outside
-    int widthPx = std::max(1, (int)std::round(w * k));
-    int endPx = std::min((int)std::ceil(end * k), (widthPx - 1) / 2);  // a short one's meet
-    int shapeW = 2 * endPx + 1, shapeH = std::max(1, (int)std::round(h * k));
-    int W = shapeW + 2 * pad, H = shapeH + 2 * pad;
-
-    std::wstring key;
-    auto add = [&](double v) { key += std::to_wstring(v) + L","; };
-    for (double v : {(double)k, (double)endPx, (double)shapeH, (double)r,
-                     (double)s.macLineAlpha}) {
-        add(v);
-    }
-    for (Color c : {fill, lighter}) add((double)(c.A << 24 | c.R << 16 | c.G << 8 | c.B));
-    for (size_t side = 0; side < glows.size(); side++) {
-        auto const& g = glows[side];
-        add((double)(g.color.R << 16 | g.color.G << 8 | g.color.B));
-        add(g.opacity);
-        add(g.reach);
-        add(light[side]);
-    }
-    if (key == s.macDrawn) return;
-
-    // Its shape's coverage.
-    std::vector<float> shape = OutlineCoverage(
-        Squircle((float)pad, (float)pad, (float)shapeW, (float)shapeH, r * k, r * k), W, H);
-
-    // The glows, then the lines over them.
-    std::vector<BYTE> pixels(shape.size() * 4, 0);
-    std::array<InnerEdge, 4> scaled = glows;
-    for (auto& g : scaled) g.reach *= k;
-    ApplyInnerEdges(pixels, W, H, shape, scaled);
-    std::vector<float> inside(shape.size()), outside(shape.size());
-    for (size_t side = 0; side < glows.size(); side++) {
-        auto [cx, cy] = kInward[side];
-        if (light[side]) {
-            auto moved = MovedShape(shape, W, H, cx, cy, k);
-            for (size_t i = 0; i < shape.size(); i++) {
-                inside[i] = std::max(inside[i], shape[i] * (1 - moved[i]));
-            }
-        } else {
-            auto moved = MovedShape(shape, W, H, -cx, -cy, k);
-            for (size_t i = 0; i < shape.size(); i++) {
-                outside[i] = std::max(outside[i], moved[i] * (1 - shape[i]));
-            }
-        }
-    }
-    float lightAlpha = s.macLineAlpha / 255.0f * kEdgeHighlightOpacity;
-    float darkAlpha = s.macLineAlpha / 255.0f;
-    for (size_t i = 0; i < shape.size(); i++) {
-        if (inside[i] > 0) {
-            Overlay(&pixels[i * 4], lighter.R, lighter.G, lighter.B, lightAlpha * inside[i]);
-        }
-        if (outside[i] > 0) {
-            Overlay(&pixels[i * 4], darker.R, darker.G, darker.B, darkAlpha * outside[i]);
-        }
-    }
-
-    // The three slices: its ends, and the column between them.
-    auto slice = [&](int x0, int width) {
-        std::vector<BYTE> part((size_t)width * H * 4);
-        for (int y = 0; y < H; y++) {
-            memcpy(&part[(size_t)y * width * 4], &pixels[((size_t)y * W + x0) * 4], width * 4);
-        }
-        return BitmapFromPixels(width, H, part);
-    };
-    int endW = pad + endPx;
-    float viewEnd = endW / k, viewH = H / k, viewPad = pad / k;
-    s.macLeft.Source(slice(0, endW));
-    s.macMiddle.Source(slice(endW, 1));
-    s.macRight.Source(slice(endW + 1, W - endW - 1));
-    for (auto const& image : {s.macLeft, s.macRight}) {
-        image.Width(viewEnd);
-        image.Height(viewH);
-    }
-    s.macMiddle.Height(viewH);
-    s.mac.Margin({-viewPad, -viewPad, -viewPad, -viewPad});
-    s.macDrawn = key;
-}
-
-// The squircle at `w` x `h` with corners up to `r`, and its border. The
-// MacOS Style border's glows are sized by `reference`, a height.
-void ShapeSurface(Surface& s, Look const& look, float w, float h, float r, float reference) {
-    if (!s.root || w <= 0 || h <= 0) return;
-    r = SquircleRadius(w, h, r);
-    auto outline = Squircle(0, 0, w, h, r, r);
-
-    s.fill.Data(SquircleGeometry({outline}));
-    s.edgeInner.Data(nullptr);
-    s.edgeOuter.Data(nullptr);
-    if (look.border == Border::Standard || look.border == Border::Custom) {
-        // A line inside all four sides, as wide as set.
-        float width = std::min((float)look.borderWidth, std::min(w, h) / 2);
-        float inner = std::max(0.0f, r - width);
-        if (width > 0) {
-            s.edgeInner.Data(SquircleGeometry(
-                {outline, Squircle(width, width, w - 2 * width, h - 2 * width, inner, inner)}));
-        }
-    } else if (look.border == Border::Mac) {
-        Try([&] { DrawMacBorder(s, w, h, r, reference); }, L"Mac border");
-    }
-    if (s.blurShape) Try([&] { s.blurShape.Path(SquirclePath(outline)); }, L"Blur shape");
-    if (s.glassShape) Try([&] { s.glassShape.Path(SquirclePath(outline)); }, L"Glass shape");
-}
-
-// =============================================================================
 // TASKBAR BUTTONS
 // =============================================================================
+
+void MarkPlatesDirty();
 
 // ---- Sliding ----
 // Windows moves buttons to their new places at once (as apps open and close,
@@ -3790,8 +2467,836 @@ void HideBackground(wux::FrameworkElement const& el) {
 // =============================================================================
 // DOCK PLATE
 // =============================================================================
-// Behind each taskbar's icons: a surface, with the dividers and the Recycle
-// Bin beside the icons.
+// Behind each taskbar's icons: blur, color and edge, layered in a grid.
+
+constexpr float kMaxBlur = 60;                  // Blur 50 = 30, like Windows' acrylic
+constexpr float kEdgeHighlight = 0.7f;          // a light edge, and blank glows: this far to white
+constexpr float kEdgeShadow = 0.7f;             // a dark edge: this far to black
+constexpr float kDividerOpacity = 0.75f;        // of the dots' opacity
+constexpr float kEdgeHighlightOpacity = 0.5f;   // a light edge, of the edges' opacity
+constexpr float kEdgeMinOpacity = 0.20f;        // edge opacity at dock Opacity 0...
+constexpr float kEdgeMaxOpacity = 0.65f;        // ...rising to this at kEdgeMaxOpacityAt
+constexpr int kEdgeMaxOpacityAt = 30;
+constexpr float kMarkDarkLightness = 0.05f;   // dividers and dots on a light dock
+constexpr float kMarkLightLightness = 0.9f;   // dividers and dots on a dark dock
+constexpr uint8_t kMarkAlphaOnLight = 200;
+constexpr uint8_t kMarkAlphaOnDark = 125;
+constexpr uint8_t kStandardEdgeAlphaOnLight = 135;
+
+// ---- Colors ----
+
+bool IsLightColor(uint8_t r, uint8_t g, uint8_t b) {
+    return 0.299f * r + 0.587f * g + 0.114f * b > 140;
+}
+
+float Lightness(Color color) {
+    int max = std::max({color.R, color.G, color.B});
+    int min = std::min({color.R, color.G, color.B});
+    return (max + min) / 510.0f;
+}
+
+// `color` with its HSL lightness moved by `delta`.
+Color ShiftLightness(Color color, float delta);
+
+// `color` with its HSL lightness moved by `delta`.
+Color ShiftLightness(Color color, float delta) {
+    float r = color.R / 255.0f, g = color.G / 255.0f, b = color.B / 255.0f;
+    float max = std::max({r, g, b}), min = std::min({r, g, b});
+    float l = (max + min) / 2, h = 0, s = 0;
+    if (max != min) {
+        float d = max - min;
+        s = l > 0.5f ? d / (2 - max - min) : d / (max + min);
+        if (max == r) h = (g - b) / d + (g < b ? 6 : 0);
+        else if (max == g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h /= 6;
+    }
+    l = std::clamp(l + delta, 0.0f, 1.0f);
+    auto channel = [](float p, float q, float t) {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1.0f / 6) return p + (q - p) * 6 * t;
+        if (t < 1.0f / 2) return q;
+        if (t < 2.0f / 3) return p + (q - p) * (2.0f / 3 - t) * 6;
+        return p;
+    };
+    if (s == 0) {
+        r = g = b = l;
+    } else {
+        float q = l < 0.5f ? l * (1 + s) : l + s - l * s;
+        float p = 2 * l - q;
+        r = channel(p, q, h + 1.0f / 3);
+        g = channel(p, q, h);
+        b = channel(p, q, h - 1.0f / 3);
+    }
+    auto byte = [](float v) { return (uint8_t)std::lround(std::clamp(v, 0.0f, 1.0f) * 255); };
+    return {color.A, byte(r), byte(g), byte(b)};
+}
+
+// ---- Effects ----
+// Described directly, as Explorer doesn't ship Win2D.
+
+enum DOCK_EFFECT_PROPERTY_MAPPING : int {
+    DOCK_EFFECT_PROPERTY_MAPPING_DIRECT = 1,
+};
+
+MIDL_INTERFACE("2FC57384-A068-44D7-A331-30982FCF7177")
+IDockGraphicsEffectD2D1Interop : public IUnknown {
+public:
+    virtual HRESULT STDMETHODCALLTYPE GetEffectId(GUID* id) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetNamedPropertyMapping(
+        LPCWSTR name, UINT* index, DOCK_EFFECT_PROPERTY_MAPPING* mapping) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetPropertyCount(UINT* count) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetProperty(UINT index, void** value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetSource(UINT index, void** source) = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetSourceCount(UINT* count) = 0;
+};
+__CRT_UUID_DECL(IDockGraphicsEffectD2D1Interop, 0x2fc57384, 0xa068, 0x44d7, 0xa3, 0x31, 0x30,
+                0x98, 0x2f, 0xcf, 0x71, 0x77)
+
+constexpr GUID kGaussianBlurId = {  // CLSID_D2D1GaussianBlur
+    0x1feb6d69, 0x2fe6, 0x4ac9, {0x8c, 0x58, 0x1d, 0x7f, 0x93, 0xe7, 0xa6, 0xa5}};
+
+class GaussianBlurEffect
+    : public winrt::implements<GaussianBlurEffect, wge::IGraphicsEffect,
+                               wge::IGraphicsEffectSource, IDockGraphicsEffectD2D1Interop> {
+public:
+    GaussianBlurEffect(float amount, wge::IGraphicsEffectSource const& source)
+        : m_amount(amount), m_source(source) {}
+
+    winrt::hstring Name() { return m_name; }
+    void Name(winrt::hstring const& name) { m_name = name; }
+
+    HRESULT STDMETHODCALLTYPE GetEffectId(GUID* id) override {
+        *id = kGaussianBlurId;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetNamedPropertyMapping(
+        LPCWSTR name, UINT* index, DOCK_EFFECT_PROPERTY_MAPPING* mapping) override {
+        if (_wcsicmp(name, L"BlurAmount") != 0) return E_INVALIDARG;
+        *index = 0;
+        *mapping = DOCK_EFFECT_PROPERTY_MAPPING_DIRECT;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetPropertyCount(UINT* count) override {
+        *count = 3;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetProperty(UINT index, void** value) override {
+        try {
+            wf::IInspectable v;
+            switch (index) {
+                case 0: v = wf::PropertyValue::CreateSingle(m_amount); break;  // std. deviation
+                case 1: v = wf::PropertyValue::CreateUInt32(1); break;         // balanced
+                case 2: v = wf::PropertyValue::CreateUInt32(1); break;         // hard border
+                default: return E_INVALIDARG;
+            }
+            *value = winrt::detach_abi(v.as<wf::IPropertyValue>());
+            return S_OK;
+        } catch (...) {
+            return winrt::to_hresult();
+        }
+    }
+    HRESULT STDMETHODCALLTYPE GetSource(UINT index, void** source) override {
+        if (index != 0) return E_INVALIDARG;
+        winrt::copy_to_abi(m_source, *source);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetSourceCount(UINT* count) override {
+        *count = 1;
+        return S_OK;
+    }
+
+private:
+    float m_amount;
+    wge::IGraphicsEffectSource m_source;
+    winrt::hstring m_name;
+};
+
+constexpr GUID kColorMatrixId = {  // CLSID_D2D1ColorMatrix
+    0x921f03d6, 0x641c, 0x47df, {0x85, 0x2d, 0xb4, 0xbb, 0x61, 0x53, 0xae, 0x11}};
+
+// Each color channel scaled by `scale` and moved by `offset`, then with
+// `clamp` held between 0 and 1. Alpha is left alone.
+class ColorMatrixEffect
+    : public winrt::implements<ColorMatrixEffect, wge::IGraphicsEffect,
+                               wge::IGraphicsEffectSource, IDockGraphicsEffectD2D1Interop> {
+public:
+    ColorMatrixEffect(float scale, float offset, bool clamp,
+                      wge::IGraphicsEffectSource const& source)
+        : m_clamp(clamp), m_source(source) {
+        // 5x4, by input: R, G, B, A, then the offsets.
+        m_matrix[0] = m_matrix[5] = m_matrix[10] = scale;
+        m_matrix[15] = 1;
+        m_matrix[16] = m_matrix[17] = m_matrix[18] = offset;
+    }
+
+    winrt::hstring Name() { return m_name; }
+    void Name(winrt::hstring const& name) { m_name = name; }
+
+    HRESULT STDMETHODCALLTYPE GetEffectId(GUID* id) override {
+        *id = kColorMatrixId;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetNamedPropertyMapping(LPCWSTR, UINT*,
+                                                      DOCK_EFFECT_PROPERTY_MAPPING*) override {
+        return E_INVALIDARG;
+    }
+    HRESULT STDMETHODCALLTYPE GetPropertyCount(UINT* count) override {
+        *count = 3;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetProperty(UINT index, void** value) override {
+        try {
+            wf::IInspectable v;
+            switch (index) {
+                case 0:
+                    v = wf::PropertyValue::CreateSingleArray(
+                        winrt::array_view<float const>(m_matrix, m_matrix + 20));
+                    break;
+                case 1: v = wf::PropertyValue::CreateUInt32(1); break;  // premultiplied
+                case 2: v = wf::PropertyValue::CreateBoolean(m_clamp); break;
+                default: return E_INVALIDARG;
+            }
+            *value = winrt::detach_abi(v.as<wf::IPropertyValue>());
+            return S_OK;
+        } catch (...) {
+            return winrt::to_hresult();
+        }
+    }
+    HRESULT STDMETHODCALLTYPE GetSource(UINT index, void** source) override {
+        if (index != 0) return E_INVALIDARG;
+        winrt::copy_to_abi(m_source, *source);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GetSourceCount(UINT* count) override {
+        *count = 1;
+        return S_OK;
+    }
+
+private:
+    float m_matrix[20] = {};
+    bool m_clamp;
+    wge::IGraphicsEffectSource m_source;
+    winrt::hstring m_name;
+};
+
+// ---- Squircle ----
+
+// Apple's continuous corner, as PaintCode measured it: a near-circular arc eased
+// into the straight edges by Béziers. Points are (along the edge in, along the
+// edge out) from the corner, in radii. After the first, each three are a cubic
+// curve; a straight line repeats its end.
+constexpr float kCornerReach = 1.52866f;
+constexpr float kCorner[16][2] = {
+    {kCornerReach, 0},
+    {1.08849f, 0}, {0.86841f, 0}, {0.66993f, 0.06550f},
+    {0.66993f, 0.06550f}, {0.63149f, 0.07491f}, {0.63149f, 0.07491f},
+    {0.37282f, 0.16906f}, {0.16906f, 0.37282f}, {0.07491f, 0.63149f},
+    {0.07491f, 0.63149f}, {0.06550f, 0.66993f}, {0.06550f, 0.66993f},
+    {0, 0.86841f}, {0, 1.08849f}, {0, kCornerReach},
+};
+
+// The largest corner radius up to `r` that fits a `w` x `h` box.
+float SquircleRadius(float w, float h, float r) {
+    return std::clamp(std::min(w, h) / 2 / kCornerReach, 0.0f, r);
+}
+
+// An outline is closed: a start point, then cubic curves as three points each
+// (a straight line repeats its end). The dock's and the tray's backgrounds,
+// icon tiles and the labels' bubbles are all drawn from outlines.
+using Outline = std::vector<wf::Point>;
+
+// A closed outline: a start point, then cubic curves as three points each.
+Outline Squircle(float x, float y, float w, float h, float rx, float ry) {
+    struct Corner { float x, y, inX, inY, outX, outY; };
+    Corner corners[] = {{x + w, y, -1, 0, 0, 1}, {x + w, y + h, 0, -1, -1, 0},
+                        {x, y + h, 1, 0, 0, -1}, {x, y, 0, 1, 1, 0}};
+    Outline points;
+    for (auto& c : corners) {
+        for (int i = 0; i < 16; i++) {
+            auto [in, out] = kCorner[i];
+            wf::Point point{c.x + (in * c.inX + out * c.outX) * rx,
+                            c.y + (in * c.inY + out * c.outY) * ry};
+            if (i == 0 && !points.empty()) {
+                points.insert(points.end(), {points.back(), point});  // the straight edge
+            }
+            points.push_back(point);
+        }
+    }
+    return points;
+}
+
+wuxm::PathGeometry SquircleGeometry(std::initializer_list<Outline> outlines) {
+    wuxm::PathGeometry geometry;
+    geometry.FillRule(wuxm::FillRule::EvenOdd);
+    for (auto& points : outlines) {
+        wuxm::PolyBezierSegment curves;
+        for (size_t i = 1; i < points.size(); i++) curves.Points().Append(points[i]);
+        wuxm::PathFigure figure;
+        figure.StartPoint(points[0]);
+        figure.IsClosed(true);
+        figure.Segments().Append(curves);
+        geometry.Figures().Append(figure);
+    }
+    return geometry;
+}
+
+// ---- Lines and plain corners ----
+
+// Builds an outline from lines, quarter circles and curves.
+struct OutlineBuilder {
+    Outline points;
+
+    void Start(wf::Point p) { points = {p}; }
+    void CurveTo(wf::Point c1, wf::Point c2, wf::Point p) {
+        points.insert(points.end(), {c1, c2, p});
+    }
+    void LineTo(wf::Point p) {
+        if (!At(p)) CurveTo(points.back(), p, p);
+    }
+    // A quarter circle to `p`, round the corner at `corner`.
+    void ArcTo(wf::Point corner, wf::Point p) {
+        constexpr float kQuarter = 0.5522848f;  // how far toward the corner its curve bends
+        if (!At(p)) {
+            CurveTo(Toward(points.back(), corner, kQuarter), Toward(p, corner, kQuarter), p);
+        }
+    }
+    // A curve to `p`, bent toward `corner`: a quadratic curve, as a cubic one.
+    void BendTo(wf::Point corner, wf::Point p) {
+        CurveTo(Toward(points.back(), corner, 2.0f / 3), Toward(p, corner, 2.0f / 3), p);
+    }
+
+private:
+    bool At(wf::Point p) const { return points.back().X == p.X && points.back().Y == p.Y; }
+    static wf::Point Toward(wf::Point from, wf::Point to, float share) {
+        return {from.X + (to.X - from.X) * share, from.Y + (to.Y - from.Y) * share};
+    }
+};
+
+// The box at (`x`, `y`), `w` by `h`, with plain circular corners of radius
+// `r`; square ones at 0.
+Outline RoundedRect(float x, float y, float w, float h, float r) {
+    OutlineBuilder box;
+    box.Start({x, y + r});
+    box.ArcTo({x, y}, {x + r, y});
+    box.LineTo({x + w - r, y});
+    box.ArcTo({x + w, y}, {x + w, y + r});
+    box.LineTo({x + w, y + h - r});
+    box.ArcTo({x + w, y + h}, {x + w - r, y + h});
+    box.LineTo({x + r, y + h});
+    box.ArcTo({x, y + h}, {x, y + h - r});
+    return box.points;
+}
+
+MIDL_INTERFACE("0657AF73-53FD-47CF-84FF-C8492D2A80A3")
+IDockGeometrySource2DInterop : public IUnknown {
+public:
+    virtual HRESULT STDMETHODCALLTYPE GetGeometry(ID2D1Geometry** value) = 0;
+    virtual HRESULT STDMETHODCALLTYPE TryGetGeometryUsingFactory(ID2D1Factory* factory,
+                                                                 ID2D1Geometry** value) = 0;
+};
+__CRT_UUID_DECL(IDockGeometrySource2DInterop, 0x0657af73, 0x53fd, 0x47cf, 0x84, 0xff, 0xc8,
+                0x49, 0x2d, 0x2a, 0x80, 0xa3)
+
+winrt::com_ptr<ID2D1Factory> g_d2d;
+
+struct GeometrySource
+    : winrt::implements<GeometrySource, wg::IGeometrySource2D, IDockGeometrySource2DInterop> {
+    winrt::com_ptr<ID2D1Geometry> geometry;
+    HRESULT STDMETHODCALLTYPE GetGeometry(ID2D1Geometry** value) override {
+        geometry.copy_to(value);
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE TryGetGeometryUsingFactory(ID2D1Factory*,
+                                                         ID2D1Geometry** value) override {
+        *value = nullptr;
+        return E_NOTIMPL;
+    }
+};
+
+// ---- Direct2D ----
+// Everything the dock draws for itself is drawn with Direct2D, into pictures
+// in memory: outlines filled, lines stroked and pictures resized (and, in
+// LABELS, text).
+//
+// These shapes were first drawn with GDI+, which puts a shape half a pixel
+// right of and below where Direct2D does. They're kept there (kShapeOffset),
+// so their edges are exactly as soft as they always were.
+
+constexpr float kShapeOffset = 0.5f;
+const auto kD2DHighQualityCubic = (D2D1_INTERPOLATION_MODE)5;  // D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC
+
+winrt::com_ptr<ID2D1DCRenderTarget> g_canvasTarget;  // draws every Canvas, one at a time
+bool g_cubicResize = true;  // pictures are resized with Direct2D's best filter, while it works
+
+// Direct2D's factory, made the first time it's needed.
+ID2D1Factory* D2DFactory() {
+    if (!g_d2d) {
+        winrt::check_hresult(D2D1CreateFactory(D2D1_FACTORY_TYPE_MULTI_THREADED,
+                                               __uuidof(ID2D1Factory), nullptr, g_d2d.put_void()));
+    }
+    return g_d2d.get();
+}
+
+// Let go of as the mod unloads.
+void ReleaseDirect2D() {
+    g_canvasTarget = nullptr;
+    g_d2d = nullptr;
+}
+
+D2D1_MATRIX_3X2_F D2DTranslation(float x, float y) {
+    D2D1_MATRIX_3X2_F m{};
+    m._11 = m._22 = 1;
+    m._31 = x;
+    m._32 = y;
+    return m;
+}
+
+D2D1_COLOR_F D2DColor(Color c) {
+    return D2D1::ColorF(c.R / 255.0f, c.G / 255.0f, c.B / 255.0f, c.A / 255.0f);
+}
+
+// The box at (`x`, `y`), `w` by `h`.
+D2D1_RECT_F D2DBox(float x, float y, float w, float h) {
+    return {x, y, x + w, y + h};
+}
+
+// An outline as a Direct2D path, moved by (`dx`, `dy`).
+winrt::com_ptr<ID2D1PathGeometry> OutlineGeometry(Outline const& points, float dx = 0,
+                                                  float dy = 0) {
+    winrt::com_ptr<ID2D1PathGeometry> path;
+    winrt::check_hresult(D2DFactory()->CreatePathGeometry(path.put()));
+    winrt::com_ptr<ID2D1GeometrySink> sink;
+    winrt::check_hresult(path->Open(sink.put()));
+    auto at = [&](size_t i) { return D2D1_POINT_2F{points[i].X + dx, points[i].Y + dy}; };
+    sink->BeginFigure(at(0), D2D1_FIGURE_BEGIN_FILLED);
+    for (size_t i = 1; i + 2 < points.size(); i += 3) sink->AddBezier({at(i), at(i + 1), at(i + 2)});
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    winrt::check_hresult(sink->Close());
+    return path;
+}
+
+// The same outline for composition, which takes it through Direct2D.
+wuc::CompositionPath SquirclePath(Outline const& points) {
+    auto source = winrt::make_self<GeometrySource>();
+    source->geometry = OutlineGeometry(points);
+    return wuc::CompositionPath(source.as<wg::IGeometrySource2D>());
+}
+
+// ---- Canvas ----
+
+// A picture in memory that Direct2D draws into, and code reads and writes
+// directly: premultiplied BGRA, top row first, clear to begin with. It has a
+// device context too, for a layered window to take its picture from.
+class Canvas {
+public:
+    Canvas(int width, int height) : width_(width), height_(height) {
+        if (width <= 0 || height <= 0) return;
+        BITMAPINFO info{};
+        info.bmiHeader = {sizeof(BITMAPINFOHEADER), width, -height, 1, 32, BI_RGB};
+        void* bits = nullptr;
+        HDC screen = GetDC(nullptr);
+        dc_ = CreateCompatibleDC(screen);
+        if (dc_) bitmap_ = CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+        ReleaseDC(nullptr, screen);
+        if (!bitmap_ || !bits) return;
+        previous_ = SelectObject(dc_, bitmap_);
+        pixels_ = (BYTE*)bits;
+    }
+    Canvas(Canvas const&) = delete;
+    Canvas& operator=(Canvas const&) = delete;
+    ~Canvas() {
+        if (previous_) SelectObject(dc_, previous_);
+        if (bitmap_) DeleteObject(bitmap_);
+        if (dc_) DeleteDC(dc_);
+    }
+
+    explicit operator bool() const { return pixels_ != nullptr; }
+    int Width() const { return width_; }
+    int Height() const { return height_; }
+    size_t PixelCount() const { return pixels_ ? (size_t)width_ * height_ : 0; }
+    BYTE* Pixels() const { return pixels_; }
+    HDC Dc() const { return dc_; }
+
+    // Draws with Direct2D, over what's there already, by calling
+    // draw(ID2D1RenderTarget*). Throws if it fails.
+    template <typename F>
+    void Draw(F&& draw) {
+        if (!pixels_) winrt::throw_hresult(E_OUTOFMEMORY);
+        auto& target = g_canvasTarget;
+        if (!target) {
+            auto props = D2D1::RenderTargetProperties(
+                D2D1_RENDER_TARGET_TYPE_SOFTWARE,
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
+            winrt::check_hresult(D2DFactory()->CreateDCRenderTarget(&props, target.put()));
+            // No ClearType: the pictures' alpha is their own.
+            target->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);
+        }
+        RECT box{0, 0, width_, height_};
+        GdiFlush();
+        winrt::check_hresult(target->BindDC(dc_, &box));
+        target->BeginDraw();
+        HRESULT hr = S_OK;
+        try {
+            ID2D1RenderTarget* onto = target.get();
+            draw(onto);
+        } catch (...) {
+            hr = winrt::to_hresult();
+        }
+        HRESULT ended = target->EndDraw();
+        GdiFlush();
+        if (FAILED(ended)) target = nullptr;  // made again next time
+        winrt::check_hresult(FAILED(hr) ? hr : ended);
+    }
+
+private:
+    int width_, height_;
+    HDC dc_ = nullptr;
+    HBITMAP bitmap_ = nullptr;
+    HGDIOBJ previous_ = nullptr;
+    BYTE* pixels_ = nullptr;
+};
+
+// ---- Drawing ----
+
+// `pixels` (`w` by `h`) as a picture `target` can draw.
+winrt::com_ptr<ID2D1Bitmap> D2DPicture(ID2D1RenderTarget* target, BYTE const* pixels, int w,
+                                       int h) {
+    D2D1_BITMAP_PROPERTIES props{{DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED}, 96,
+                                 96};
+    winrt::com_ptr<ID2D1Bitmap> picture;
+    winrt::check_hresult(target->CreateBitmap(D2D1_SIZE_U{(UINT32)w, (UINT32)h}, pixels,
+                                              (UINT32)w * 4, &props, picture.put()));
+    return picture;
+}
+
+// The part `from` of a `w` by `h` picture, drawn into `to`, resized with the
+// best filter there is.
+void DrawPicture(ID2D1RenderTarget* target, BYTE const* pixels, int w, int h, D2D1_RECT_F from,
+                 D2D1_RECT_F to) {
+    auto picture = D2DPicture(target, pixels, w, h);
+    winrt::com_ptr<ID2D1DeviceContext> context;
+    target->QueryInterface(__uuidof(ID2D1DeviceContext), context.put_void());
+    if (context && g_cubicResize) {
+        context->DrawBitmap(picture.get(), &to, 1.0f, kD2DHighQualityCubic, &from, nullptr);
+    } else {
+        target->DrawBitmap(picture.get(), &to, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, &from);
+    }
+}
+
+// Runs `draw`, which resizes pictures. If it fails with Direct2D's best filter,
+// it's run once more with the plain one, which is used from then on.
+template <typename F>
+bool TryResizing(F&& draw, PCWSTR what) {
+    if (Try(draw, what)) return true;
+    if (!g_cubicResize) return false;
+    g_cubicResize = false;
+    Wh_Log(L"Resizing with Direct2D's plain filter from now on");
+    return Try(draw, what);
+}
+
+// `outline` filled with `color`.
+void FillOutline(ID2D1RenderTarget* target, Outline const& outline, Color color) {
+    winrt::com_ptr<ID2D1SolidColorBrush> brush;
+    winrt::check_hresult(target->CreateSolidColorBrush(D2DColor(color), brush.put()));
+    target->FillGeometry(OutlineGeometry(outline, kShapeOffset, kShapeOffset).get(), brush.get(),
+                         nullptr);
+}
+
+// `outline` filled with a `w` by `h` picture whose corner is at (`x`, `y`),
+// mirrored past its edges.
+void FillOutlineWithPicture(ID2D1RenderTarget* target, Outline const& outline,
+                            BYTE const* pixels, int w, int h, float x, float y) {
+    auto picture = D2DPicture(target, pixels, w, h);
+    D2D1_BITMAP_BRUSH_PROPERTIES tiling{D2D1_EXTEND_MODE_MIRROR, D2D1_EXTEND_MODE_MIRROR,
+                                        D2D1_BITMAP_INTERPOLATION_MODE_LINEAR};
+    D2D1_BRUSH_PROPERTIES placing{1.0f, D2DTranslation(x, y)};
+    winrt::com_ptr<ID2D1BitmapBrush> brush;
+    winrt::check_hresult(
+        target->CreateBitmapBrush(picture.get(), &tiling, &placing, brush.put()));
+    target->FillGeometry(OutlineGeometry(outline, kShapeOffset, kShapeOffset).get(), brush.get(),
+                         nullptr);
+}
+
+// A line through `points`, `width` wide, in `color`: with round ends and
+// corners, or square ones.
+void StrokeLine(ID2D1RenderTarget* target, std::initializer_list<wf::Point> points, Color color,
+                float width, bool round) {
+    if (points.size() < 2) return;
+    winrt::com_ptr<ID2D1PathGeometry> path;
+    winrt::check_hresult(D2DFactory()->CreatePathGeometry(path.put()));
+    winrt::com_ptr<ID2D1GeometrySink> sink;
+    winrt::check_hresult(path->Open(sink.put()));
+    auto at = [](wf::Point p) { return D2D1_POINT_2F{p.X + kShapeOffset, p.Y + kShapeOffset}; };
+    auto point = points.begin();
+    sink->BeginFigure(at(*point), D2D1_FIGURE_BEGIN_HOLLOW);
+    for (auto last = point++; point != points.end(); last = point++) {
+        sink->AddBezier({at(*last), at(*point), at(*point)});  // a straight line
+    }
+    sink->EndFigure(D2D1_FIGURE_END_OPEN);
+    winrt::check_hresult(sink->Close());
+
+    winrt::com_ptr<ID2D1StrokeStyle> style;  // none for square ends and corners
+    if (round) {
+        D2D1_STROKE_STYLE_PROPERTIES props{D2D1_CAP_STYLE_ROUND, D2D1_CAP_STYLE_ROUND,
+                                           D2D1_CAP_STYLE_ROUND, D2D1_LINE_JOIN_ROUND,
+                                           10.0f,                D2D1_DASH_STYLE_SOLID,
+                                           0.0f};
+        winrt::check_hresult(D2DFactory()->CreateStrokeStyle(&props, nullptr, 0, style.put()));
+    }
+    winrt::com_ptr<ID2D1SolidColorBrush> brush;
+    winrt::check_hresult(target->CreateSolidColorBrush(D2DColor(color), brush.put()));
+    target->DrawGeometry(path.get(), brush.get(), width, style.get());
+}
+
+// How much of each pixel of a `w` by `h` picture `outline` covers.
+std::vector<float> OutlineCoverage(Outline const& outline, int w, int h) {
+    Canvas canvas(w, h);
+    canvas.Draw([&](ID2D1RenderTarget* target) {
+        FillOutline(target, outline, Color{255, 0, 0, 0});
+    });
+    std::vector<float> coverage(canvas.PixelCount());
+    BYTE const* pixels = canvas.Pixels();
+    for (size_t i = 0; i < coverage.size(); i++) coverage[i] = pixels[i * 4 + 3] / 255.0f;
+    return coverage;
+}
+
+// ---- Blur ----
+
+// How bright what's behind can show: no brighter than `ceiling`, no darker
+// than `floor`, each color channel 0-1. Neither, at 1 and 0.
+struct ToneLimit {
+    float ceiling = 1, floor = 0;
+    bool Limits() const { return ceiling < 1 || floor > 0; }
+    bool operator==(ToneLimit const&) const = default;
+};
+
+// A brightness limit in percent (100 for none), for what's drawn over it: a
+// ceiling under light marks or text; under dark ones, a floor as far from black
+// as the ceiling is from white.
+ToneLimit ToneFor(int limitPercent, bool lightInk) {
+    ToneLimit tone;
+    float limit = limitPercent / 100.0f;
+    if (limit >= 1) return tone;
+    if (lightInk) tone.ceiling = limit;
+    else tone.floor = 1 - limit;
+    return tone;
+}
+
+// What's behind `host`, blurred by `amount`, held within `tone`, and clipped to
+// the dock's shape, which is returned for ShapeSurface. Nothing, if it does
+// neither. Holding a channel under a ceiling c takes two steps: scaled by 1/c
+// and clipped at 1, then scaled back by c. Above a floor, the same from the
+// other end.
+wuc::CompositionPathGeometry SetBlurVisual(wux::UIElement const& host, float amount,
+                                           ToneLimit tone = {}) {
+    if (amount <= 0 && !tone.Limits()) {
+        wuxh::ElementCompositionPreview::SetElementChildVisual(host, nullptr);
+        return nullptr;
+    }
+    auto hostVisual = wuxh::ElementCompositionPreview::GetElementVisual(host);
+    auto compositor = hostVisual.Compositor();
+
+    wge::IGraphicsEffectSource source = wuc::CompositionEffectSourceParameter(L"Backdrop");
+    wge::IGraphicsEffect effect{nullptr};
+    auto chain = [&](wge::IGraphicsEffect const& next) {
+        effect = next;
+        source = next.as<wge::IGraphicsEffectSource>();
+    };
+    if (amount > 0) chain(winrt::make<GaussianBlurEffect>(amount, source));
+    if (tone.ceiling < 1) {
+        float c = std::max(tone.ceiling, 0.01f);
+        chain(winrt::make<ColorMatrixEffect>(1 / c, 0.0f, true, source));
+        chain(winrt::make<ColorMatrixEffect>(c, 0.0f, false, source));
+    }
+    if (tone.floor > 0) {
+        float room = std::max(1 - tone.floor, 0.01f);  // from the floor up to white
+        chain(winrt::make<ColorMatrixEffect>(-1 / room, 1 / room, true, source));
+        chain(winrt::make<ColorMatrixEffect>(-room, 1.0f, false, source));
+    }
+    auto brush = compositor.CreateEffectFactory(effect).CreateBrush();
+    brush.SetSourceParameter(L"Backdrop", compositor.CreateBackdropBrush());
+
+    auto sprite = compositor.CreateSpriteVisual();
+    sprite.Brush(brush);
+    auto size = compositor.CreateExpressionAnimation(L"host.Size");
+    size.SetReferenceParameter(L"host", hostVisual);
+    sprite.StartAnimation(L"Size", size);
+    auto shape = compositor.CreatePathGeometry();
+    sprite.Clip(compositor.CreateGeometricClip(shape));
+
+    wuxh::ElementCompositionPreview::SetElementChildVisual(host, sprite);
+    return shape;
+}
+
+// ---- Surface ----
+// A background like the dock's, as layers in a grid: blur, color, and a border:
+// a line, or the MacOS Style border's lines and glows. The dock's plate has
+// one, and so does the tray.
+
+struct Surface {
+    wuxc::Grid root{nullptr};
+    wuxc::Border blurHost{nullptr};
+    wuxs::Path fill{nullptr}, edgeInner{nullptr}, edgeOuter{nullptr};
+    // The MacOS Style border, drawn as a picture in three slices (see MAC
+    // BORDER): its ends, and its middle stretched between them.
+    wuxc::Grid mac{nullptr};
+    wuxc::Image macLeft{nullptr}, macMiddle{nullptr}, macRight{nullptr};
+    bool macShown = false;
+    Color macFill{};               // the background it's drawn for
+    uint8_t macLineAlpha = 0;      // its dark lines'; the light ones are half
+    std::wstring macDrawn;         // what it was last drawn for
+    wuc::CompositionPathGeometry blurShape{nullptr};
+    float appliedBlur = -1;
+    ToneLimit appliedTone;
+    // Liquid Glass, drawn in blurHost in place of the blur (the dock's only;
+    // see LIQUID GLASS).
+    bool glassShown = false;
+    wuc::CompositionPathGeometry glassShape{nullptr};  // its clip
+};
+
+// Its layers in drawing order, in a new grid, unrounded so the right edge
+// doesn't wobble. Not hit-testable. The caller places s.root.
+void BuildSurface(Surface& s) {
+    s.root = wuxc::Grid();
+    s.blurHost = wuxc::Border();
+    s.fill = wuxs::Path();
+    s.edgeInner = wuxs::Path();
+    s.edgeOuter = wuxs::Path();
+    s.root.IsHitTestVisible(false);
+    s.root.UseLayoutRounding(false);
+
+    s.mac = wuxc::Grid();
+    s.mac.Visibility(Visibility::Collapsed);
+    for (auto width : {wux::GridLengthHelper::Auto(), wux::GridLengthHelper::FromValueAndType(
+                                                          1, wux::GridUnitType::Star),
+                       wux::GridLengthHelper::Auto()}) {
+        wuxc::ColumnDefinition column;
+        column.Width(width);
+        s.mac.ColumnDefinitions().Append(column);
+    }
+    int i = 0;
+    for (auto* image : {&s.macLeft, &s.macMiddle, &s.macRight}) {
+        *image = wuxc::Image();
+        image->Stretch(wuxm::Stretch::Fill);
+        image->UseLayoutRounding(false);
+        wuxc::Grid::SetColumn(*image, i++);
+        s.mac.Children().Append(*image);
+    }
+
+    for (wux::FrameworkElement layer : std::initializer_list<wux::FrameworkElement>{
+             s.blurHost, s.fill, s.mac, s.edgeInner, s.edgeOuter}) {
+        layer.UseLayoutRounding(false);
+        s.root.Children().Append(layer);
+    }
+}
+
+void RemoveSurfaceBlur(Surface& s) {
+    if (s.blurHost) {
+        Try([&] { wuxh::ElementCompositionPreview::SetElementChildVisual(s.blurHost, nullptr); });
+    }
+    s.blurShape = nullptr;
+    s.appliedBlur = -1;
+    s.appliedTone = {};
+    s.glassShown = false;  // its visual went with the blur's
+}
+
+// The color behind `look`'s icons, and whether it's light. With System, or no
+// background, light follows `systemLight`. With no background, the color it
+// would have, which its edges and glow are drawn from.
+Color LookFill(Look const& look, bool systemLight, bool& light) {
+    uint8_t alpha = (uint8_t)(look.opacity * 255 / 100);
+    light = look.background == Background::Light;
+    if (look.background == Background::System || look.background == Background::None) {
+        light = systemLight;
+    }
+    if (look.background == Background::Custom) {
+        auto [r, g, b] = look.color;
+        light = IsLightColor(r, g, b);
+        return Color{alpha, r, g, b};
+    }
+    return light ? Color{alpha, 0xCC, 0xCC, 0xCC} : Color{alpha, 0x33, 0x33, 0x33};
+}
+
+// Dividers and dots: dark on a light background, light on a dark one.
+Color MarkColor(Color fill, bool light) {
+    Color mark = ShiftLightness(
+        fill, (light ? kMarkDarkLightness : kMarkLightLightness) - Lightness(fill));
+    mark.A = light ? kMarkAlphaOnLight : kMarkAlphaOnDark;
+    return mark;
+}
+
+// Frosted glass, in `fill` (from LookFill), with `look`'s border; what's seen
+// through it held within `tone`.
+void ApplySurfaceLook(Surface& s, Look const& look, Color fill, bool light,
+                      ToneLimit tone = {}) {
+    bool none = look.background == Background::None;
+    s.fill.Fill(none ? nullptr : wuxm::SolidColorBrush(fill));
+    s.edgeInner.Fill(nullptr);
+    s.edgeOuter.Fill(nullptr);
+    s.macShown = look.border == Border::Mac;
+    s.mac.Visibility(s.macShown ? Visibility::Visible : Visibility::Collapsed);
+    auto scaled = [](uint8_t alpha, int percent) {
+        return (uint8_t)std::lround(alpha * percent / 100.0f);
+    };
+
+    if (look.border == Border::Standard) {
+        // A solid edge in the dividers' color, softer on a light background.
+        Color line = MarkColor(fill, light);
+        if (light) line.A = kStandardEdgeAlphaOnLight;
+        line.A = scaled(line.A, look.borderOpacity);
+        s.edgeInner.Fill(wuxm::SolidColorBrush(line));
+    } else if (look.border == Border::Custom) {
+        auto [r, g, b] = look.borderColor;
+        s.edgeInner.Fill(wuxm::SolidColorBrush(Color{scaled(255, look.borderOpacity), r, g, b}));
+    } else if (look.border == Border::Mac) {
+        // Drawn as the surface is shaped (see MAC BORDER), its lines stronger
+        // on a more opaque background.
+        float t = std::clamp((float)look.opacity / kEdgeMaxOpacityAt, 0.0f, 1.0f);
+        s.macLineAlpha =
+            (uint8_t)std::lround(255 * (kEdgeMinOpacity + (kEdgeMaxOpacity - kEdgeMinOpacity) * t));
+        s.macFill = fill;
+    }
+
+    float blur = none ? 0 : look.blur * kMaxBlur / 100;
+    if (s.glassShown) return;  // Liquid Glass is in its place
+    if (blur != s.appliedBlur || !(tone == s.appliedTone)) {
+        s.appliedBlur = blur;
+        s.appliedTone = tone;
+        s.blurShape = nullptr;
+        Try([&] { s.blurShape = SetBlurVisual(s.blurHost, blur, tone); }, L"Blur");
+    }
+}
+
+void DrawMacBorder(Surface& s, float w, float h, float r, float reference);
+
+// The squircle at `w` x `h` with corners up to `r`, and its border. The
+// MacOS Style border's glows are sized by `reference`, a height.
+void ShapeSurface(Surface& s, Look const& look, float w, float h, float r, float reference) {
+    if (!s.root || w <= 0 || h <= 0) return;
+    r = SquircleRadius(w, h, r);
+    auto outline = Squircle(0, 0, w, h, r, r);
+
+    s.fill.Data(SquircleGeometry({outline}));
+    s.edgeInner.Data(nullptr);
+    s.edgeOuter.Data(nullptr);
+    if (look.border == Border::Standard || look.border == Border::Custom) {
+        // A line inside all four sides, as wide as set.
+        float width = std::min((float)look.borderWidth, std::min(w, h) / 2);
+        float inner = std::max(0.0f, r - width);
+        if (width > 0) {
+            s.edgeInner.Data(SquircleGeometry(
+                {outline, Squircle(width, width, w - 2 * width, h - 2 * width, inner, inner)}));
+        }
+    } else if (look.border == Border::Mac) {
+        Try([&] { DrawMacBorder(s, w, h, r, reference); }, L"Mac border");
+    }
+    if (s.blurShape) Try([&] { s.blurShape.Path(SquirclePath(outline)); }, L"Blur shape");
+    if (s.glassShape) Try([&] { s.glassShape.Path(SquirclePath(outline)); }, L"Glass shape");
+}
+
+// ---- Plate ----
 
 // A divider between icons, after `after` (or, before the Recycle Bin, the last).
 struct Divider {
@@ -3881,9 +3386,6 @@ struct Plate {
 
 [[clang::no_destroy]] std::optional<std::list<Plate>> g_plates{std::in_place};
 
-// Frames left in which to measure the plates again (see MarkPlatesDirty).
-int g_platesDirtyFrames = 0;
-
 std::vector<wux::UIElement> PlateParts(Plate const& p) {
     std::vector<wux::UIElement> parts{p.surface.root, p.trash, p.divider};
     for (auto& d : p.dividers) parts.push_back(d.element);
@@ -3903,6 +3405,8 @@ float GetRowOffsetY(wux::DependencyObject const& row) {
     return p ? p->offsetY : 0;
 }
 
+void ColorDots(Plate& p);
+
 // The squircle at the dock's current width.
 void ShapePlate(Plate& p) {
     float w = p.width > 0 ? p.width : p.baseWidth;
@@ -3912,13 +3416,6 @@ void ShapePlate(Plate& p) {
 
 bool SystemIsLight(wux::FrameworkElement const& el) {
     return el && el.ActualTheme() == wux::ElementTheme::Light;
-}
-
-// Whether the dock's background is light, as ApplyPlateLook colors it.
-bool PlateIsLight(Plate const& p) {
-    bool light;
-    LookFill(g_settings.dockLook, SystemIsLight(p.panel.get()), light);
-    return light;
 }
 
 // Frosted glass. Dividers and dots are dark on a light dock, light on a dark one.
@@ -3940,6 +3437,13 @@ void ApplyPlateLook(Plate& p) {
     ApplySurfaceLook(p.surface, look, fill, light,
                      ToneFor(g_settings.dockBrightnessLimit, true));  // always a ceiling
     ShapePlate(p);
+}
+
+// Whether the dock's background is light, as ApplyPlateLook colors it.
+bool PlateIsLight(Plate const& p) {
+    bool light;
+    LookFill(g_settings.dockLook, SystemIsLight(p.panel.get()), light);
+    return light;
 }
 
 // Lays `el` out from the panel's top-left corner, positioned by its margin.
@@ -3974,54 +3478,172 @@ wuxc::Border AddDivider(wuxc::Panel const& panel, wux::UIElement const& row) {
 }
 
 // =============================================================================
-// APPS
+// APP ICONS
 // =============================================================================
-// Which app a button is for. Each entry in "App Icons" names an app by its ID
-// (Ctrl+I copies it: see INFO CARDS), its name as the dock shows it, or its
-// .exe. A button is for an app ID, so that's matched first, then the name,
-// then the .exe, which takes finding: Windows makes an app's ID from its
-// .exe's path when it hasn't one of its own, Start's shortcut to it points at
-// one, and its windows run from one.
+// File Explorer and any other app can show the user's own icon, and every app a
+// squircle tile, as on a Mac. The taskbar reuses buttons and sets new icons, so
+// a replacement follows along, keeping the taskbar's own icon to put back. Both
+// are drawn bigger than their box, so their artwork matches other icons and
+// their shadows spill past.
 
-// The app id of a taskbar button, from its automation id ("Appid: ...").
-std::wstring ButtonAppId(wux::FrameworkElement const& button) {
-    std::wstring id{wux::Automation::AutomationProperties::GetAutomationId(button)};
-    constexpr std::wstring_view prefix = L"Appid: ";
-    if (id.size() <= prefix.size() || id.compare(0, prefix.size(), prefix) != 0) return {};
-    return id.substr(prefix.size());
+// Custom: the user's own icon for the app, from "App Icons". Plain: the
+// taskbar's own icon, replaced only if it came back too small (see
+// Undersized), with "Use High Resolution Icons" on and squircles off.
+enum class IconLook { Stock, Finder, Custom, Squircle, Plain };
+
+// What a bitmap loaded from, if it's a file or an address; empty otherwise.
+std::wstring UriText(wuxm::ImageSource const& source) {
+    auto bitmap = source ? source.try_as<wuxm::Imaging::BitmapImage>() : nullptr;
+    auto uri = bitmap ? bitmap.UriSource() : nullptr;
+    return uri ? std::wstring(uri.AbsoluteUri()) : std::wstring();
 }
 
-// The first text in Windows' own tooltip: the app's name.
-std::wstring FirstText(wf::IInspectable const& value, int depth = 0) {
-    if (!value || depth > 4) return {};
-    if (auto s = value.try_as<wf::IPropertyValue>(); s && s.Type() == wf::PropertyType::String) {
-        return std::wstring(s.GetString());
+// Calls `changed` when the taskbar loads another icon into a bitmap it already
+// has, as it can when an app's windows open or close, without setting it on
+// the Image again: as it opens (decoded), or as its file or address changes.
+class StockWatch {
+public:
+    StockWatch() = default;
+    StockWatch(StockWatch const&) = delete;
+    StockWatch& operator=(StockWatch const&) = delete;
+    ~StockWatch() { Stop(); }
+
+    void Watch(wuxm::ImageSource const& source, std::function<void(wf::IInspectable const&)> changed) {
+        Stop();
+        auto bitmap = source ? source.try_as<wuxm::Imaging::BitmapImage>() : nullptr;
+        if (!bitmap) return;
+        bitmap_ = winrt::make_weak(bitmap);
+        opened_ = bitmap.ImageOpened(
+            winrt::auto_revoke,
+            [changed](wf::IInspectable const& sender, wux::RoutedEventArgs const&) {
+                if (!g_unloading) changed(sender);
+            });
+        uriToken_ = bitmap.RegisterPropertyChangedCallback(
+            wuxm::Imaging::BitmapImage::UriSourceProperty(),
+            [changed](wux::DependencyObject const& sender, wux::DependencyProperty const&) {
+                if (!g_unloading) changed(sender);
+            });
     }
-    if (auto text = value.try_as<wuxc::TextBlock>()) return std::wstring(text.Text());
-    if (auto control = value.try_as<wuxc::ContentControl>()) {
-        return FirstText(control.Content(), depth + 1);
-    }
-    if (auto panel = value.try_as<wuxc::Panel>()) {
-        for (auto const& child : panel.Children()) {
-            if (auto text = FirstText(child, depth + 1); !text.empty()) return text;
+
+    void Stop() {
+        opened_.revoke();
+        if (uriToken_) {
+            if (auto bitmap = bitmap_.get()) {
+                try {
+                    bitmap.UnregisterPropertyChangedCallback(
+                        wuxm::Imaging::BitmapImage::UriSourceProperty(), uriToken_);
+                } catch (...) {
+                }
+            }
         }
+        uriToken_ = 0;
+        bitmap_ = nullptr;
     }
-    return {};
+
+private:
+    winrt::weak_ref<wuxm::Imaging::BitmapImage> bitmap_;
+    wuxm::Imaging::BitmapImage::ImageOpened_revoker opened_;
+    int64_t uriToken_ = 0;
+};
+
+// For the icon of a button the taskbar's given to another app (see UpdateAppIcon).
+constexpr auto kNewAppIconWait = std::chrono::milliseconds(300);
+// The longest a new app's icon is kept out of sight while its tile's made.
+constexpr auto kHideNewIconFor = std::chrono::milliseconds(5000);
+
+struct IconSwap {
+    winrt::weak_ref<wuxc::Image> image;
+    winrt::weak_ref<wux::FrameworkElement> button;
+    IconLook look = IconLook::Stock;
+    int custom = -1;                   // Custom: its entry in "App Icons"
+    wuxm::ImageSource stock{nullptr};  // the taskbar's latest
+    wuxm::ImageSource shown{nullptr};  // what replaces it, once ready
+    wuxm::ScaleTransform transform{nullptr};  // the mod's, while a replacement shows
+    wf::IAsyncInfo render{nullptr};           // drawing the icon to make a tile from
+    bool rendering = false;
+    int generation = 0;  // up when a drawing in progress is of an icon since replaced
+    bool retry = false;  // drawn again on the retry timer, at `retryAt`
+    std::chrono::steady_clock::time_point retryAt{};
+    int retries = 0;
+    bool renderParent = false;  // drawing the icon alone was refused: what holds it is drawn
+    bool checked = false;       // Plain: its pixels looked at, for this icon
+    std::wstring tileUri;       // what the taskbar's icon loaded from, as its tile was made
+    std::wstring appId;         // the app its button was for, as last processed
+    std::chrono::steady_clock::time_point waitUntil{};  // for a new app's icon (see UpdateAppIcon)
+    winrt::weak_ref<wux::UIElement> hidden;  // what holds it, while its tile's made (HideTillMade)
+    std::chrono::steady_clock::time_point hiddenUntil{};
+    StockWatch watch;           // the taskbar's icon, loading anew
+};
+
+// Whether its replacement is still to be made from the taskbar's icon's pixels.
+bool NeedsPixels(IconSwap const& s) {
+    return (s.look == IconLook::Squircle && !s.shown) || (s.look == IconLook::Plain && !s.checked);
 }
 
-std::wstring AppName(wux::FrameworkElement const& button) {
-    std::wstring name = FirstText(wuxc::ToolTipService::GetToolTip(button));
-    if (name.empty()) {
-        // "App - 2 running windows", without the count.
-        name = wux::Automation::AutomationProperties::GetName(button);
-        size_t dash = name.rfind(L" - ");
-        if (dash != name.npos && std::any_of(name.begin() + dash, name.end(),
-                                             [](wchar_t c) { return iswdigit(c); })) {
-            name.resize(dash);
-        }
-    }
-    return name.substr(0, name.find(L'\n'));
+// What was made from its icon dropped, along with any drawing of it still in
+// progress, to be made again.
+void ResetSwap(IconSwap& s) {
+    if (s.render) Try([&] { s.render.Cancel(); });
+    s.render = nullptr;
+    s.rendering = false;
+    s.generation++;
+    s.shown = nullptr;
+    s.tileUri.clear();
+    s.retry = false;
+    s.retries = 0;
+    s.renderParent = false;
+    s.checked = false;
+    s.waitUntil = {};
 }
+
+extern bool g_iconsSettling;
+void ArmSquircleRetry();
+
+// ---- New apps' icons out of sight till their tiles are made ----
+// Rather than the taskbar's own icon first, then the tile. What holds the icon
+// is hidden, not the icon: a tile's made from a drawing of the icon, which
+// hiding it would leave blank. If drawing the icon alone is refused, what holds
+// it is drawn instead, and what holds that is hidden.
+
+wux::UIElement IconHolder(IconSwap const& s, wuxc::Image const& image) {
+    auto parent = wuxm::VisualTreeHelper::GetParent(image).try_as<wux::UIElement>();
+    if (!parent || !s.renderParent) return parent;
+    return wuxm::VisualTreeHelper::GetParent(parent).try_as<wux::UIElement>();
+}
+
+void ShowIconAgain(IconSwap& s) {
+    if (auto holder = s.hidden.get()) {
+        Try([&] { wuxh::ElementCompositionPreview::GetElementVisual(holder).Opacity(1); });
+    }
+    s.hidden = nullptr;
+    s.hiddenUntil = {};
+}
+
+// Hidden till its tile's made (or, for a plain icon, till it's been looked
+// at), for kHideNewIconFor at most. Not as the dock starts, when every icon
+// waits for the rest to settle (see WaitForIconsToSettle).
+void HideTillMade(IconSwap& s, wuxc::Image const& image) {
+    if (g_iconsSettling || !NeedsPixels(s)) return;
+    auto holder = IconHolder(s, image);
+    if (!holder || s.hidden.get() == holder) return;
+    auto until = s.hidden.get() ? s.hiddenUntil
+                                : std::chrono::steady_clock::now() + kHideNewIconFor;
+    ShowIconAgain(s);  // what held it before, if it's moved
+    wuxh::ElementCompositionPreview::GetElementVisual(holder).Opacity(0);
+    s.hidden = winrt::make_weak(holder);
+    s.hiddenUntil = until;
+    ArmSquircleRetry();
+}
+
+// ---- Other apps' icons ----
+// Each entry in "App Icons" names an app by its ID (Ctrl+I copies it: see INFO
+// CARDS), its name as the dock shows it, or its .exe. A button is for an app
+// ID, so that's matched first, then the name, then the .exe, which takes
+// finding: Windows makes an app's ID from its .exe's path when it hasn't one of
+// its own, Start's shortcut to it points at one, and its windows run from one.
+
+std::wstring AppName(wux::FrameworkElement const& button);
+std::wstring ButtonAppId(wux::FrameworkElement const& button);
 
 // The path in an app ID Windows made from a file's path, for an app without an
 // ID of its own: the path, or a known folder's ID and the path within it.
@@ -4041,6 +3663,11 @@ std::wstring AppIdPath(std::wstring const& appId) {
         path = appId;
     }
     return path;
+}
+
+std::wstring_view FileName(std::wstring_view path) {
+    size_t slash = path.find_last_of(L"\\/");
+    return slash == path.npos ? path : path.substr(slash + 1);
 }
 
 // IShellItem2, IPropertyStore and the properties read here, without linking
@@ -4237,14 +3864,365 @@ int AppIconFor(wux::FrameworkElement const& button, AppMatch* how = nullptr) {
     return -1;
 }
 
-// =============================================================================
-// ICON TILES
-// =============================================================================
-// An icon's pixels made into a macOS-style tile. If it's mostly opaque and
-// square, it's a tile already: cropped to fill the squircle, but only if each
-// side is flat between its corners, right up to its edge. Otherwise it's a
-// shape, shrunk onto a tile of the Squircle color: for Auto, light, or dark if
-// its outline is light (see TileFill).
+wuxm::ImageSource FileTile(std::wstring const& path, int px);
+wuxm::ImageSource StartTile(int px);
+
+// The user's image, as a tile if it goes in one (see Squircled).
+wuxm::ImageSource CustomIconSource(CustomIcon const& icon, wux::UIElement const& el) {
+    return Squircled(icon) ? FileTile(icon.path, MagnifiedPixels(el, 1))
+                           : LoadImageFile(icon.path, MagnifiedPixels(el, icon.scale));
+}
+
+// Loaded once per entry. An unreadable image leaves Windows' own icon.
+[[clang::no_destroy]] std::vector<std::optional<wuxm::ImageSource>> g_appIconSources;
+
+wuxm::ImageSource AppIconSource(int i, wux::UIElement const& el) {
+    auto const& entries = g_settings.appIcons;
+    if (i < 0 || i >= (int)entries.size()) return nullptr;
+    if (g_appIconSources.size() != entries.size()) {
+        g_appIconSources.assign(entries.size(), std::nullopt);
+    }
+    auto& source = g_appIconSources[i];
+    if (!source) source = CustomIconSource(entries[i].icon, el);
+    return *source;
+}
+
+float AppIconScale(int i) {
+    auto const& entries = g_settings.appIcons;
+    return i >= 0 && i < (int)entries.size() ? CustomIconScale(entries[i].icon) : kMacIconScale;
+}
+
+[[clang::no_destroy]] std::list<IconSwap> g_iconSwaps;
+[[clang::no_destroy]] std::optional<wuxm::ImageSource> g_finderIconSource;  // none if unreadable
+
+// With `custom`, its entry in "App Icons", for Custom.
+IconLook LookFor(wux::FrameworkElement const& button, int* custom = nullptr) {
+    if (custom) *custom = -1;
+    if (HasFinderIcon() && IsFileExplorer(button)) return IconLook::Finder;
+    if (!IsAppButton(button)) return IconLook::Stock;
+    if (int i = AppIconFor(button); i >= 0) {
+        if (custom) *custom = i;
+        return IconLook::Custom;
+    }
+    if (g_settings.squircleIcons) return IconLook::Squircle;
+    if (g_size.iconLoadSize > 0) return IconLook::Plain;
+    return IconLook::Stock;
+}
+
+IconSwap* FindSwap(wux::FrameworkElement const& image) {
+    for (auto& s : g_iconSwaps) {
+        if (s.image.get() == image) return &s;
+    }
+    return nullptr;
+}
+
+// Loaded once. An unreadable custom image leaves Windows' own icon.
+wuxm::ImageSource FinderIconSource(wux::UIElement const& el) {
+    if (!g_finderIconSource) g_finderIconSource = CustomIconSource(g_settings.customFinder, el);
+    return *g_finderIconSource;
+}
+
+// Bigger while a replacement shows; the taskbar's own icon keeps its size.
+void ApplyIconScale(wux::FrameworkElement const& el) {
+    IconSwap* s = FindSwap(el);
+    if (!s) return;
+    auto dp = wux::UIElement::RenderTransformProperty();
+    bool replaced = s->shown && el.as<wuxc::Image>().Source() == s->shown;
+    bool ours = s->transform && el.RenderTransform() == s->transform;
+    if (!replaced || s->look == IconLook::Plain) {
+        if (ours) PutBack(el, dp);
+        return;
+    }
+    float k = s->look == IconLook::Finder   ? CustomIconScale(g_settings.customFinder)
+              : s->look == IconLook::Custom ? AppIconScale(s->custom)
+                                            : kMacIconScale;
+    float center = g_size.icon / 2;
+    if (ours && s->transform.ScaleX() == k && s->transform.CenterX() == center) return;
+    s->transform = wuxm::ScaleTransform();
+    s->transform.ScaleX(k);
+    s->transform.ScaleY(k);
+    s->transform.CenterX(center);
+    s->transform.CenterY(center);
+    el.RenderTransform(s->transform);
+}
+
+void RequestSquircle(IconSwap& s, wuxc::Image const& image);
+wuxm::ImageSource CachedSquircle(wuxm::ImageSource const& stock, std::wstring const& appId);
+void ArmSquircleRetry();
+void NoteIconChange();
+void OnStockChanged(wf::IInspectable const& sender);
+std::wstring ButtonAppId(wux::FrameworkElement const& button);
+
+// Only tiles and plain icons are made from the taskbar's icon, so only they
+// need to know when it changes in place.
+void WatchStock(IconSwap& s) {
+    if (s.look != IconLook::Squircle && s.look != IconLook::Plain) return s.watch.Stop();
+    s.watch.Watch(s.stock, [](wf::IInspectable const& sender) {
+        Try([&] { OnStockChanged(sender); }, L"Squircle icon");
+    });
+}
+
+void ShowSwap(IconSwap& s, wuxc::Image const& image) {
+    auto source = s.shown ? s.shown : s.stock;
+    if (source && image.Source() != source) image.Source(source);
+    ApplyIconSize(image);
+    ApplyIconScale(image);
+}
+
+void UpdateSwap(IconSwap& s, wuxc::Image const& image) {
+    if (s.look == IconLook::Finder) s.shown = FinderIconSource(image);
+    if (s.look == IconLook::Custom) s.shown = AppIconSource(s.custom, image);
+    if (s.look == IconLook::Squircle && !s.shown) {
+        s.shown = CachedSquircle(s.stock, s.appId);
+        if (s.shown) s.tileUri = UriText(s.stock);
+    }
+    ShowSwap(s, image);
+    if (NeedsPixels(s)) RequestSquircle(s, image);
+    if (!NeedsPixels(s)) ShowIconAgain(s);
+}
+
+// The taskbar set an icon: kept to put back, and replaced again.
+void OnIconSourceChanged(wux::FrameworkElement const& el) {
+    IconSwap* s = FindSwap(el);
+    if (!s) return;
+    auto image = el.as<wuxc::Image>();
+    auto source = image.Source();
+    if (source == s->shown || source == s->stock) return;
+    NoteIconChange();
+    auto dp = wuxc::Image::SourceProperty();
+    if (Override* o = FindOverride(el, dp)) o->original = image.ReadLocalValue(dp);
+    auto button = s->button.get();
+    s->stock = source;
+    s->custom = -1;
+    s->look = button ? LookFor(button, &s->custom) : IconLook::Stock;
+    if (button) s->appId = ButtonAppId(button);
+    ResetSwap(*s);
+    WatchStock(*s);
+    UpdateSwap(*s, image);
+}
+
+void UpdateAppIcon(wux::FrameworkElement const& el, wux::FrameworkElement const& button) {
+    auto image = el.try_as<wuxc::Image>();
+    if (!image) return;
+    auto dp = wuxc::Image::SourceProperty();
+    int custom = -1;
+    IconLook look = LookFor(button, &custom);
+    IconSwap* s = FindSwap(el);
+
+    if (look == IconLook::Stock) {
+        if (!s) return;
+        ShowIconAgain(*s);
+        g_iconSwaps.remove_if([&](IconSwap const& swap) { return &swap == s; });
+        Release(el, dp);
+        Release(el, wux::UIElement::RenderTransformProperty());
+        ApplyIconSize(el);
+        return;
+    }
+    bool fresh = !s;
+    if (!s) {
+        // A binding couldn't be put back once replaced.
+        auto original = image.ReadLocalValue(dp);
+        if (original && original.try_as<wux::Data::BindingExpression>()) return;
+        s = &g_iconSwaps.emplace_back();
+        s->image = winrt::make_weak(image);
+        s->stock = image.Source();
+        NoteIconChange();
+        Track(el, dp, OnIconSourceChanged);
+        Track(el, wux::UIElement::RenderTransformProperty(), ApplyIconScale);
+    }
+    s->button = winrt::make_weak(button);
+    auto appId = ButtonAppId(button);
+    if (s->look != look || s->custom != custom) {
+        s->look = look;
+        s->custom = custom;
+        ResetSwap(*s);
+        WatchStock(*s);
+    } else if (appId != s->appId && !s->appId.empty()) {
+        // The taskbar gave this button to another app, as when one opens and
+        // the rest move along. It can draw the new app's icon into the bitmap
+        // it has, without setting it anew, so what was made from the old one
+        // has to go. The new icon may still be on its way into the bitmap, so
+        // it's given a moment, unless there's a tile for it already.
+        NoteIconChange();
+        ResetSwap(*s);
+        fresh = true;
+        if (s->look != IconLook::Squircle || !CachedSquircle(s->stock, appId)) {
+            s->waitUntil = std::chrono::steady_clock::now() + kNewAppIconWait;
+            s->retry = true;
+            s->retryAt = s->waitUntil;
+            ArmSquircleRetry();
+        }
+    }
+    s->appId = appId;
+    UpdateSwap(*s, image);
+    if (fresh) HideTillMade(*s, image);
+}
+
+// ---- Start ----
+// In the dock without "Hide Windows Start Button", it can show the user's own
+// icon, or with Squircle Icons on, a tile of the mod's own (see ModStartIcon).
+// Windows' is an animation, not an image, so it can't be made into a tile: it's
+// made transparent, and the mod's image goes over it in an Image of its own.
+// That's added as the plates are measured, as the taskbar doesn't like its tree
+// changing while it updates a button.
+
+struct StartIcon {
+    winrt::weak_ref<wux::FrameworkElement> stock;  // AnimatedVisualPlayer#Icon
+    winrt::weak_ref<wuxc::Panel> panel;            // where the image is
+    wuxc::Image image{nullptr};
+};
+
+[[clang::no_destroy]] std::optional<std::list<StartIcon>> g_startIcons{std::in_place};
+[[clang::no_destroy]] std::optional<wuxm::ImageSource> g_startIconSource;  // none if unreadable
+
+void ApplyTransparent(wux::FrameworkElement const& el) {
+    if (el.Opacity() != 0) el.Opacity(0);
+}
+
+// Windows' Start icon in `button`. Nothing on a layout it doesn't know: hiding
+// the wrong element could leave Start unusable.
+wux::FrameworkElement FindStockStartIcon(wux::FrameworkElement const& button) {
+    wux::FrameworkElement found{nullptr};
+    ForEachDescendant(button, 8, [&](wux::FrameworkElement const& el) {
+        if (found) return false;
+        if (el.Name() == L"Icon" &&
+            std::wstring_view(winrt::get_class_name(el)).find(L"AnimatedVisualPlayer") !=
+                std::wstring_view::npos) {
+            found = el;
+            return false;
+        }
+        return true;
+    });
+    return found;
+}
+
+void AddStartIcon(wux::FrameworkElement const& button) {
+    auto stock = FindStockStartIcon(button);
+    if (!stock) return;
+    for (auto& s : *g_startIcons) {
+        if (s.stock.get() == stock) return;
+    }
+    // The first panel above it, and its child that holds it.
+    wux::DependencyObject child = stock;
+    wuxc::Panel panel{nullptr};
+    while (child && child != button) {
+        auto parent = wuxm::VisualTreeHelper::GetParent(child);
+        if (!parent || parent == button) return;
+        panel = parent.try_as<wuxc::Panel>();
+        if (panel) break;
+        child = parent;
+    }
+    // Only over it in a grid; in another panel, the image would sit beside it.
+    uint32_t index;
+    auto holder = child.try_as<wux::FrameworkElement>();
+    auto grid = panel ? panel.try_as<wuxc::Grid>() : nullptr;
+    if (!grid || !holder || !panel.Children().IndexOf(holder, index)) return;
+
+    auto& custom = g_settings.customStart;
+    if (!g_startIconSource) {
+        g_startIconSource = HasStartIcon() ? CustomIconSource(custom, button)
+                                           : StartTile(MagnifiedPixels(button, 1));
+    }
+    if (!*g_startIconSource) return;  // unreadable: Windows' own stays
+    float k = CustomIconScale(custom);
+
+    wuxc::Image image;
+    image.Source(*g_startIconSource);
+    image.Stretch(wuxm::Stretch::Uniform);
+    image.Width(g_size.icon);
+    image.Height(g_size.icon);
+    image.HorizontalAlignment(wux::HorizontalAlignment::Center);
+    image.VerticalAlignment(wux::VerticalAlignment::Center);
+    image.IsHitTestVisible(false);
+    wuxm::ScaleTransform scale;
+    scale.ScaleX(k);
+    scale.ScaleY(k);
+    image.RenderTransformOrigin({0.5, 0.5});
+    image.RenderTransform(scale);
+    wuxc::Grid::SetRow(image, wuxc::Grid::GetRow(holder));
+    wuxc::Grid::SetColumn(image, wuxc::Grid::GetColumn(holder));
+    wuxc::Grid::SetRowSpan(image, wuxc::Grid::GetRowSpan(holder));
+    wuxc::Grid::SetColumnSpan(image, wuxc::Grid::GetColumnSpan(holder));
+    panel.Children().InsertAt(index + 1, image);
+    Track(stock, wux::UIElement::OpacityProperty(), ApplyTransparent);
+    ApplyTransparent(stock);
+    g_startIcons->push_back({winrt::make_weak(stock), winrt::make_weak(panel), image});
+}
+
+// Windows' own logo fills its box and sits a little low and left in it, so
+// beside macOS-style icons it looks too big and off center: it's shrunk and
+// moved up and right.
+constexpr float kStartLogoScale = 0.85f;
+constexpr float kStartLogoRaise = 0.02f;  // of the icon size: 1px at Size 70
+constexpr float kStartLogoShift = 0.02f;  // rightward, the same
+
+void ApplyStartLogoFit(wux::FrameworkElement const& el) {
+    float half = g_size.icon / 2, raise = -std::round(kStartLogoRaise * g_size.icon);
+    float shift = std::round(kStartLogoShift * g_size.icon);
+    auto have = el.RenderTransform().try_as<wuxm::CompositeTransform>();
+    if (have && have.ScaleX() == kStartLogoScale && have.ScaleY() == kStartLogoScale &&
+        have.CenterX() == half && have.CenterY() == half && have.TranslateX() == shift &&
+        have.TranslateY() == raise) {
+        return;
+    }
+    wuxm::CompositeTransform fit;
+    fit.CenterX(half);
+    fit.CenterY(half);
+    fit.ScaleX(kStartLogoScale);
+    fit.ScaleY(kStartLogoScale);
+    fit.TranslateX(shift);
+    fit.TranslateY(raise);
+    el.RenderTransform(fit);
+}
+
+// `el` is an icon in `button`: fitted if it's Start's own logo, showing.
+void UpdateStartLogo(wux::FrameworkElement const& el, wux::FrameworkElement const& button) {
+    if (!IsStartButton(button) ||
+        std::wstring_view(winrt::get_class_name(el)).find(L"AnimatedVisualPlayer") ==
+            std::wstring_view::npos) {
+        return;
+    }
+    auto dp = wux::UIElement::RenderTransformProperty();
+    if (g_settings.hideStart || ModStartIcon()) {
+        if (FindOverride(el, dp)) Release(el, dp);
+        return;
+    }
+    Track(el, dp, ApplyStartLogoFit);
+    ApplyStartLogoFit(el);
+}
+
+void RemoveStartIcons() {
+    if (!g_startIcons) return;
+    for (auto& s : *g_startIcons) {
+        if (auto stock = s.stock.get()) {
+            Try([&] { Release(stock, wux::UIElement::OpacityProperty()); });
+        }
+        auto panel = s.panel.get();
+        uint32_t index;
+        if (panel && s.image) Try([&] {
+            if (panel.Children().IndexOf(s.image, index)) panel.Children().RemoveAt(index);
+        });
+    }
+    g_startIcons->clear();
+    g_startIconSource.reset();
+}
+
+// While the plates are measured.
+void EnsureStartIcons() {
+    g_startIcons->remove_if([](StartIcon const& s) { return !s.stock.get(); });
+    if (!ModStartIcon()) return;
+    for (auto& b : *g_buttons) {
+        auto button = b.element.get();
+        if (button && IsStartButton(button)) Try([&] { AddStartIcon(button); }, L"Start icon");
+    }
+}
+
+// ---- Squircle tiles ----
+// The icon's pixels, read straight from its bitmap, or else from the icon as
+// drawn. If it's mostly opaque and square, it's a tile already: cropped to fill
+// the squircle, but only if each side is flat between its corners, right up to
+// its edge. Otherwise it's a shape, shrunk onto a tile of the Squircle color:
+// for Auto, light, or dark if its outline is light (see TileFill).
 
 constexpr int kAlphaShown = 64;              // counts as part of the icon
 constexpr int kAlphaSolid = 224;             // counts as solid
@@ -4261,10 +4239,38 @@ constexpr float kPreferLightDarkFrom = 0.75f;  // the same, for Prefer Light
 constexpr float kPreferDarkLightUpTo = 0.35f;  // and the lightest that's light, for Prefer Dark
 constexpr float kTileShadowBlurStep = 0.003f;   // per Drop Shadow Spread, of the tile's size
 constexpr float kTileShadowDropStep = 0.0025f;  // per Drop Shadow Distance, of the tile's size
+// A side's glow or shadow is an inner shadow: the tile's shape moved in from
+// that side by this much of its reach, and softened by this much, leaving the
+// gap to be colored.
+constexpr float kTileEdgeShift = 0.4f;
+constexpr float kTileEdgeSoftness = 0.2f;
 constexpr int kSquircleRetries = 30;         // while the icon isn't laid out or drawn yet,
 constexpr int kSquircleSlowRetries = 30;     // then these, as with a button that arrives late
 constexpr auto kSquircleSlowRetryDelay = std::chrono::milliseconds(1000);
 constexpr size_t kSquircleCacheSize = 64;
+
+// Three box blurs, close to a Gaussian blur with standard deviation `sigma`.
+void Blur(std::vector<float>& v, int w, int h, float sigma) {
+    int r = (int)std::lround((std::sqrt(4 * sigma * sigma + 1) - 1) / 2);
+    if (r < 1) return;
+    std::vector<float> tmp(v.size());
+    auto pass = [r](float const* src, float* dst, int lines, int length, int step, int lineStep) {
+        for (int line = 0; line < lines; line++) {
+            float const* s = src + (size_t)line * lineStep;
+            float* d = dst + (size_t)line * lineStep;
+            float sum = 0;
+            for (int k = -r; k <= r; k++) sum += s[std::clamp(k, 0, length - 1) * step];
+            for (int i = 0; i < length; i++) {
+                d[i * step] = sum / (2 * r + 1);
+                sum += s[std::min(i + r + 1, length - 1) * step] - s[std::max(i - r, 0) * step];
+            }
+        }
+    };
+    for (int i = 0; i < 3; i++) {
+        pass(v.data(), tmp.data(), h, w, 1, w);  // rows
+        pass(tmp.data(), v.data(), w, h, w, 1);  // columns
+    }
+}
 
 struct IconPixels {
     int size = 0;
@@ -4299,6 +4305,25 @@ Outline TileOutline(float o, float t) {
     }
     r = SquircleRadius(t, t, r);
     return Squircle(o, o, t, t, r, r);
+}
+
+// `r`, `g`, `b` at `a` over a premultiplied BGRA pixel.
+void Overlay(BYTE* p, uint8_t r, uint8_t g, uint8_t b, float a) {
+    p[0] = (BYTE)std::lround(b * a + p[0] * (1 - a));
+    p[1] = (BYTE)std::lround(g * a + p[1] * (1 - a));
+    p[2] = (BYTE)std::lround(r * a + p[2] * (1 - a));
+    p[3] = (BYTE)std::lround(255 * a + p[3] * (1 - a));
+}
+
+// `top` over `pixels`, both premultiplied BGRA, `count` pixels.
+void DrawOver(BYTE* pixels, BYTE const* top, size_t count) {
+    for (size_t i = 0; i < count * 4; i += 4) {
+        int rest = 255 - top[i + 3];
+        if (rest == 255) continue;
+        for (int c = 0; c < 4; c++) {
+            pixels[i + c] = (BYTE)std::min(255, top[i + c] + (pixels[i + c] * rest + 127) / 255);
+        }
+    }
 }
 
 // The tile's colors in `pixels` (premultiplied BGRA) made more vivid or duller,
@@ -4343,6 +4368,47 @@ void ApplyTileSheen(std::vector<BYTE>& pixels, int size, std::vector<float> cons
     }
 }
 
+// A glow or shadow along one side of a shape: `reach` pixels in from its edge.
+struct InnerEdge {
+    Color color;
+    float opacity = 0;  // 0-1
+    float reach = 0;    // none at 0
+};
+
+// `edges` (top, bottom, left, right) over the shape in `pixels` (premultiplied
+// BGRA, `w` by `h`), which covers `shape`. Each is an inner shadow from its
+// side: the shape moved in from that side and softened, the gap it leaves
+// colored. So it follows the corners round, and fades out with no visible end.
+void ApplyInnerEdges(std::vector<BYTE>& pixels, int w, int h, std::vector<float> const& shape,
+                     std::array<InnerEdge, 4> const& edges) {
+    // Which way each side's shadow is cast: top, bottom, left, right.
+    const int casts[4][2] = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}};
+    std::vector<float> moved(shape.size());
+    for (size_t side = 0; side < edges.size(); side++) {
+        InnerEdge const& edge = edges[side];
+        if (edge.opacity <= 0 || edge.reach <= 0) continue;
+        float shift = edge.reach * kTileEdgeShift;
+        int whole = (int)shift;
+        float part = shift - whole;  // between two pixels: the two mixed
+        auto [cx, cy] = casts[side];
+        auto at = [&](int x, int y) {
+            return x >= 0 && y >= 0 && x < w && y < h ? shape[(size_t)y * w + x] : 0.0f;
+        };
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                moved[(size_t)y * w + x] = at(x - cx * whole, y - cy * whole) * (1 - part) +
+                                           at(x - cx * (whole + 1), y - cy * (whole + 1)) * part;
+            }
+        }
+        Blur(moved, w, h, edge.reach * kTileEdgeSoftness);
+        auto [_, r, g, b] = edge.color;
+        for (size_t i = 0; i < shape.size(); i++) {
+            float a = edge.opacity * shape[i] * std::clamp(1 - moved[i], 0.0f, 1.0f);
+            if (a > 0) Overlay(&pixels[i * 4], r, g, b, a);
+        }
+    }
+}
+
 // Each side's glow or shadow, as set, over the tile in `pixels` (premultiplied
 // BGRA, `size` square), whose shape covers `shape` and is `t` across.
 void ApplyTileEdges(std::vector<BYTE>& pixels, int size, std::vector<float> const& shape,
@@ -4354,6 +4420,146 @@ void ApplyTileEdges(std::vector<BYTE>& pixels, int size, std::vector<float> cons
         edges[side] = {{255, r, g, b}, edge.opacity / 100.0f, edge.size / 100.0f * t};
     }
     ApplyInnerEdges(pixels, size, size, shape, edges);
+}
+
+// =============================================================================
+// MAC BORDER
+// =============================================================================
+// The dock's MacOS Style border, and the tray's: each side's glow or shadow, as
+// set, drawn as squircle tiles' edges are, so it follows the corners round; and
+// a thin line along each edge, light inside one that glows, faintly dark
+// outside any other. It's drawn at the screen's scale for a short surface, a
+// pixel bigger all round for the lines outside. Past its corners it doesn't
+// change along its length, so it's shown in three slices: its two ends, and a
+// column from its middle stretched between them. As the dock widens while it
+// magnifies, nothing is drawn again.
+
+// `shape` (`w` by `h`) moved `distance` pixels along (`ux`, `uy`), a unit step
+// along one axis; a fraction mixes the two nearest pixels.
+std::vector<float> MovedShape(std::vector<float> const& shape, int w, int h, int ux, int uy,
+                              float distance) {
+    int whole = (int)distance;
+    float part = distance - whole;
+    auto at = [&](int x, int y) {
+        return x >= 0 && y >= 0 && x < w && y < h ? shape[(size_t)y * w + x] : 0.0f;
+    };
+    std::vector<float> moved(shape.size());
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            moved[(size_t)y * w + x] = at(x - ux * whole, y - uy * whole) * (1 - part) +
+                                       at(x - ux * (whole + 1), y - uy * (whole + 1)) * part;
+        }
+    }
+    return moved;
+}
+
+// For a surface `w` by `h` (view pixels) with corners `r` (as ShapeSurface
+// has them), its glows sized by `reference`; drawn again only when that or
+// its look changes.
+void DrawMacBorder(Surface& s, float w, float h, float r, float reference) {
+    float k = 1;
+    if (auto root = s.root.XamlRoot()) k = (float)root.RasterizationScale();
+    Color fill = s.macFill;
+    float fillLightness = Lightness(fill);
+    Color lighter = ShiftLightness(fill, (1 - fillLightness) * kEdgeHighlight);
+    Color darker = ShiftLightness(fill, -fillLightness * kEdgeShadow);
+    lighter.A = darker.A = 255;
+
+    // Each side's glow, in view pixels, and whether it's light.
+    std::array<InnerEdge, 4> glows;
+    std::array<bool, 4> light{};
+    for (size_t side = 0; side < glows.size(); side++) {
+        DockEdge const& edge = g_settings.dockEdges[side];
+        Color color = edge.lighter ? lighter : Color{255, edge.color[0], edge.color[1], edge.color[2]};
+        glows[side] = {color, edge.opacity / 100.0f, edge.size / 100.0f * reference};
+        light[side] = glows[side].opacity > 0 && glows[side].reach > 0 &&
+                      Lightness(color) >= fillLightness;
+    }
+
+    // How far in from each end it changes: the corners, and the top and bottom
+    // glows' softening around them, or the sides' glows, whichever's further.
+    float reachTB = std::max(glows[0].reach, glows[1].reach);
+    float reachLR = std::max(glows[2].reach, glows[3].reach);
+    float end = std::max(kCornerReach * r + reachTB * (kTileEdgeShift + 3 * kTileEdgeSoftness),
+                         reachLR) + 2;
+    int pad = std::max(1, (int)std::ceil(k));  // a view pixel, for the lines outside
+    int widthPx = std::max(1, (int)std::round(w * k));
+    int endPx = std::min((int)std::ceil(end * k), (widthPx - 1) / 2);  // a short one's meet
+    int shapeW = 2 * endPx + 1, shapeH = std::max(1, (int)std::round(h * k));
+    int W = shapeW + 2 * pad, H = shapeH + 2 * pad;
+
+    std::wstring key;
+    auto add = [&](double v) { key += std::to_wstring(v) + L","; };
+    for (double v : {(double)k, (double)endPx, (double)shapeH, (double)r,
+                     (double)s.macLineAlpha}) {
+        add(v);
+    }
+    for (Color c : {fill, lighter}) add((double)(c.A << 24 | c.R << 16 | c.G << 8 | c.B));
+    for (size_t side = 0; side < glows.size(); side++) {
+        auto const& g = glows[side];
+        add((double)(g.color.R << 16 | g.color.G << 8 | g.color.B));
+        add(g.opacity);
+        add(g.reach);
+        add(light[side]);
+    }
+    if (key == s.macDrawn) return;
+
+    // Its shape's coverage.
+    std::vector<float> shape = OutlineCoverage(
+        Squircle((float)pad, (float)pad, (float)shapeW, (float)shapeH, r * k, r * k), W, H);
+
+    // The glows, then the lines over them.
+    std::vector<BYTE> pixels(shape.size() * 4, 0);
+    std::array<InnerEdge, 4> scaled = glows;
+    for (auto& g : scaled) g.reach *= k;
+    ApplyInnerEdges(pixels, W, H, shape, scaled);
+    const int casts[4][2] = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}};  // inward from each side
+    std::vector<float> inside(shape.size()), outside(shape.size());
+    for (size_t side = 0; side < glows.size(); side++) {
+        auto [cx, cy] = casts[side];
+        if (light[side]) {
+            auto moved = MovedShape(shape, W, H, cx, cy, k);
+            for (size_t i = 0; i < shape.size(); i++) {
+                inside[i] = std::max(inside[i], shape[i] * (1 - moved[i]));
+            }
+        } else {
+            auto moved = MovedShape(shape, W, H, -cx, -cy, k);
+            for (size_t i = 0; i < shape.size(); i++) {
+                outside[i] = std::max(outside[i], moved[i] * (1 - shape[i]));
+            }
+        }
+    }
+    float lightAlpha = s.macLineAlpha / 255.0f * kEdgeHighlightOpacity;
+    float darkAlpha = s.macLineAlpha / 255.0f;
+    for (size_t i = 0; i < shape.size(); i++) {
+        if (inside[i] > 0) {
+            Overlay(&pixels[i * 4], lighter.R, lighter.G, lighter.B, lightAlpha * inside[i]);
+        }
+        if (outside[i] > 0) {
+            Overlay(&pixels[i * 4], darker.R, darker.G, darker.B, darkAlpha * outside[i]);
+        }
+    }
+
+    // The three slices: its ends, and the column between them.
+    auto slice = [&](int x0, int width) {
+        std::vector<BYTE> part((size_t)width * H * 4);
+        for (int y = 0; y < H; y++) {
+            memcpy(&part[(size_t)y * width * 4], &pixels[((size_t)y * W + x0) * 4], width * 4);
+        }
+        return BitmapFromPixels(width, H, part);
+    };
+    int endW = pad + endPx;
+    float viewEnd = endW / k, viewH = H / k, viewPad = pad / k;
+    s.macLeft.Source(slice(0, endW));
+    s.macMiddle.Source(slice(endW, 1));
+    s.macRight.Source(slice(endW + 1, W - endW - 1));
+    for (auto const& image : {s.macLeft, s.macRight}) {
+        image.Width(viewEnd);
+        image.Height(viewH);
+    }
+    s.macMiddle.Height(viewH);
+    s.mac.Margin({-viewPad, -viewPad, -viewPad, -viewPad});
+    s.macDrawn = key;
 }
 
 // A `w` x `h` icon as a squircle tile, on a canvas kMacIconScale times bigger.
@@ -4551,6 +4757,274 @@ IconPixels EnlargeArtwork(std::vector<BYTE> source, int w, int h) {
     return out;
 }
 
+// Tiles by the taskbar's icon they were made from. The taskbar can load another
+// icon into one it has, so each is also by what it loaded from, and forgotten
+// when it loads anew (see StockWatch). And it can give a button, bitmap and
+// all, to another app, so each is also by the app it was made for.
+struct CachedTile {
+    wuxm::ImageSource icon{nullptr};
+    std::wstring uri;
+    std::wstring appId;
+    wuxm::ImageSource tile{nullptr};
+    bool stale = false;
+    StockWatch watch;
+};
+
+[[clang::no_destroy]] std::list<CachedTile> g_squircleCache;
+
+// `icon` loaded anew, from `uri`: its tiles are out of date, unless it's the
+// same file again.
+void ForgetCachedSquircle(wf::IInspectable const& icon, std::wstring const& uri) {
+    for (auto& c : g_squircleCache) {
+        if (c.icon == icon && (uri.empty() || uri != c.uri)) c.stale = true;
+    }
+}
+
+wuxm::ImageSource CachedSquircle(wuxm::ImageSource const& stock, std::wstring const& appId) {
+    if (!stock) return nullptr;
+    auto uri = UriText(stock);
+    for (auto& c : g_squircleCache) {
+        if (!c.stale && c.icon == stock && c.uri == uri && c.appId == appId) return c.tile;
+    }
+    return nullptr;
+}
+
+void CacheSquircle(wuxm::ImageSource const& stock, std::wstring const& appId,
+                   wuxm::ImageSource const& tile) {
+    g_squircleCache.remove_if([&](CachedTile const& c) { return c.stale || c.icon == stock; });
+    auto& c = g_squircleCache.emplace_front();
+    c.icon = stock;
+    c.uri = UriText(stock);
+    c.appId = appId;
+    c.tile = tile;
+    c.watch.Watch(stock, [](wf::IInspectable const& sender) {
+        ForgetCachedSquircle(sender, UriText(sender.try_as<wuxm::ImageSource>()));
+    });
+    while (g_squircleCache.size() > kSquircleCacheSize) g_squircleCache.pop_back();
+}
+
+// Tiles are forgotten when their color or the size they're drawn at changes
+// since `old`, and drawn again as the buttons are next processed.
+void RecolorSquircles(Settings const& old) {
+    auto& s = g_settings;
+    bool same = old.size == s.size && old.scale == s.scale && old.tileColor == s.tileColor &&
+                std::equal(std::begin(s.tileLightColor), std::end(s.tileLightColor),
+                           std::begin(old.tileLightColor)) &&
+                std::equal(std::begin(s.tileDarkColor), std::end(s.tileDarkColor),
+                           std::begin(old.tileDarkColor)) &&
+                old.tileVibrance == s.tileVibrance &&
+                old.tileSheen == s.tileSheen && old.tileSheenOpacity == s.tileSheenOpacity &&
+                old.tileSheenSize == s.tileSheenSize &&
+                old.tileEdges == s.tileEdges && old.tileShadowSpread == s.tileShadowSpread &&
+                old.tileShadowDistance == s.tileShadowDistance &&
+                old.tileShadowOpacity == s.tileShadowOpacity &&
+                old.tileShadowDirection == s.tileShadowDirection &&
+                old.tileCorner == s.tileCorner && old.tileCornerRadius == s.tileCornerRadius &&
+                (s.tileColor != TileColor::Custom ||
+                 std::equal(std::begin(s.tileCustomColor), std::end(s.tileCustomColor),
+                            std::begin(old.tileCustomColor)));
+    // Plain icons are looked at again at the new size.
+    if (old.size != s.size || old.scale != s.scale) {
+        for (auto& swap : g_iconSwaps) {
+            if (swap.look != IconLook::Plain) continue;
+            swap.shown = nullptr;
+            swap.checked = false;
+            swap.retries = 0;
+        }
+    }
+    if (same) return;
+    g_squircleCache.clear();
+    for (auto& swap : g_iconSwaps) {
+        if (swap.look != IconLook::Squircle) continue;
+        swap.shown = nullptr;
+        swap.retries = 0;
+    }
+}
+
+// ---- Settling ----
+// Tiles are made from the icons as drawn, which are in flux while the dock
+// starts up and the taskbar reloads its icons. So they wait till no icon has
+// changed for a second, or 5 seconds at most. Again after a settings change.
+
+constexpr auto kIconsQuietFor = std::chrono::milliseconds(1000);
+constexpr auto kIconsSettleWithin = std::chrono::milliseconds(5000);
+
+bool g_iconsSettling = true;
+bool g_iconsSettleStarted = false;
+std::chrono::steady_clock::time_point g_iconsSettleStart, g_iconsLastChange;
+[[clang::no_destroy]] winrt::Windows::System::DispatcherQueueTimer g_iconsSettleTimer{nullptr};
+
+void NoteIconChange() {
+    g_iconsLastChange = std::chrono::steady_clock::now();
+}
+
+void SettleIconsAgain() {
+    g_iconsSettling = true;
+    g_iconsSettleStarted = false;
+}
+
+void StopSettlingIcons() {
+    if (g_iconsSettleTimer) g_iconsSettleTimer.Stop();
+    g_iconsSettleTimer = nullptr;
+}
+
+// Checked a few times a second; once settled, the waiting icons are drawn.
+void WaitForIconsToSettle() {
+    auto now = std::chrono::steady_clock::now();
+    if (!g_iconsSettleStarted) {
+        g_iconsSettleStarted = true;
+        g_iconsSettleStart = g_iconsLastChange = now;
+    }
+    if (g_iconsSettleTimer) return;
+    auto queue = winrt::Windows::System::DispatcherQueue::GetForCurrentThread();
+    if (!queue) {
+        g_iconsSettling = false;
+        return;
+    }
+    g_iconsSettleTimer = queue.CreateTimer();
+    g_iconsSettleTimer.Interval(std::chrono::milliseconds(200));
+    g_iconsSettleTimer.IsRepeating(true);
+    g_iconsSettleTimer.Tick([](auto&&, auto&&) {
+        if (g_unloading) return;
+        auto now = std::chrono::steady_clock::now();
+        if (now - g_iconsLastChange < kIconsQuietFor &&
+            now - g_iconsSettleStart < kIconsSettleWithin) {
+            return;
+        }
+        StopSettlingIcons();
+        g_iconsSettling = false;
+        for (auto& s : g_iconSwaps) {
+            auto image = s.image.get();
+            if (image && NeedsPixels(s)) Try([&] { UpdateSwap(s, image); }, L"Squircle icon");
+        }
+    });
+    g_iconsSettleTimer.Start();
+}
+
+// Async work's callbacks run code from the mod. Each holds a count, which
+// unloading waits on after cancelling the work (see Wh_ModBeforeUninit).
+std::atomic<int> g_pendingCallbacks = 0;
+
+std::shared_ptr<void> TrackPendingCallback() {
+    g_pendingCallbacks++;
+    return std::shared_ptr<void>(nullptr, [](void*) { g_pendingCallbacks--; });
+}
+
+void CancelSquircleRenders() {
+    for (auto& s : g_iconSwaps) {
+        if (s.render) Try([&] { s.render.Cancel(); });
+        s.render = nullptr;
+    }
+}
+
+// The taskbar loaded another icon into a bitmap it already had, without setting
+// it on the Image again: a tile made from what it held is out of date, unless
+// it's loaded from the same file again. Any drawing in progress is of the old
+// icon, so it's dropped.
+void OnStockChanged(wf::IInspectable const& sender) {
+    auto uri = UriText(sender.try_as<wuxm::ImageSource>());
+    ForgetCachedSquircle(sender, uri);
+    for (auto& s : g_iconSwaps) {
+        if (s.look != IconLook::Squircle && s.look != IconLook::Plain) continue;
+        if (!s.stock || s.stock != sender) continue;
+        if ((s.shown || s.checked) && !uri.empty() && uri == s.tileUri) continue;  // the same again
+        NoteIconChange();
+        ResetSwap(s);
+        if (auto image = s.image.get()) UpdateSwap(s, image);
+    }
+}
+
+// The retry timer, set for the soonest retry due, if any.
+void ArmSquircleRetry() {
+    HWND window = EnsureModWindow();
+    if (!window) return;
+    auto next = std::chrono::steady_clock::time_point::max();
+    for (auto& s : g_iconSwaps) {
+        if (s.retry) next = std::min(next, s.retryAt);
+        if (s.hidden.get()) next = std::min(next, s.hiddenUntil);
+    }
+    if (next == std::chrono::steady_clock::time_point::max()) {
+        KillTimer(window, kSquircleRetryTimer);
+        return;
+    }
+    auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(
+        next - std::chrono::steady_clock::now());
+    SetTimer(window, kSquircleRetryTimer, (UINT)std::max<long long>(10, wait.count()), nullptr);
+}
+
+// Icons not drawn yet, tried again when due.
+void RetrySquircles() {
+    auto now = std::chrono::steady_clock::now();
+    for (auto& s : g_iconSwaps) {
+        if (s.hidden.get() && s.hiddenUntil <= now) ShowIconAgain(s);  // its tile's too slow
+        if (!s.retry || s.retryAt > now) continue;
+        s.retry = false;
+        if (auto image = s.image.get()) Try([&] { UpdateSwap(s, image); }, L"Squircle icon");
+    }
+    ArmSquircleRetry();
+}
+
+// The app id of a taskbar button, from its automation id ("Appid: ...").
+std::wstring ButtonAppId(wux::FrameworkElement const& button) {
+    std::wstring id{wux::Automation::AutomationProperties::GetAutomationId(button)};
+    constexpr std::wstring_view prefix = L"Appid: ";
+    if (id.size() <= prefix.size() || id.compare(0, prefix.size(), prefix) != 0) return {};
+    return id.substr(prefix.size());
+}
+
+// IShellItemImageFactory, without linking uuid.lib.
+constexpr GUID kIShellItemImageFactoryId = {
+    0xbcc18b79, 0xba16, 0x442f, {0x80, 0xc4, 0x8a, 0x59, 0xc3, 0x0c, 0x46, 0x3b}};
+
+// An `px` pixel icon of `name` (a shell path) from the shell, as premultiplied
+// BGRA, top row first; empty if there's none.
+std::vector<BYTE> ShellIconPixels(std::wstring const& name, int px, int& w, int& h) {
+    winrt::com_ptr<IShellItemImageFactory> factory;
+    if (FAILED(SHCreateItemFromParsingName(name.c_str(), nullptr, kIShellItemImageFactoryId,
+                                           factory.put_void()))) {
+        return {};
+    }
+    HBITMAP bitmap = nullptr;
+    if (FAILED(factory->GetImage({px, px}, (SIIGBF)(SIIGBF_ICONONLY | SIIGBF_BIGGERSIZEOK), &bitmap)) ||
+        !bitmap) {
+        return {};
+    }
+    std::vector<BYTE> pixels;
+    BITMAP bm{};
+    if (GetObject(bitmap, sizeof(bm), &bm) && bm.bmWidth > 0 && bm.bmHeight > 0) {
+        BITMAPINFO bi{};
+        bi.bmiHeader = {sizeof(BITMAPINFOHEADER), bm.bmWidth, -bm.bmHeight, 1, 32, BI_RGB};
+        pixels.resize((size_t)bm.bmWidth * bm.bmHeight * 4);
+        HDC dc = GetDC(nullptr);
+        if (GetDIBits(dc, bitmap, 0, bm.bmHeight, pixels.data(), &bi, DIB_RGB_COLORS) !=
+            bm.bmHeight) {
+            pixels.clear();
+        }
+        ReleaseDC(nullptr, dc);
+    }
+    DeleteObject(bitmap);
+    if (pixels.empty()) return {};
+
+    // Usually premultiplied already; with no alpha at all, it's opaque.
+    bool anyAlpha = false, straight = false;
+    for (size_t i = 0; i < pixels.size(); i += 4) {
+        BYTE a = pixels[i + 3];
+        anyAlpha |= a != 0;
+        straight |= pixels[i] > a || pixels[i + 1] > a || pixels[i + 2] > a;
+    }
+    for (size_t i = 0; i < pixels.size(); i += 4) {
+        if (!anyAlpha) {
+            pixels[i + 3] = 255;
+        } else if (straight) {
+            BYTE a = pixels[i + 3];
+            for (int c = 0; c < 3; c++) pixels[i + c] = (BYTE)(pixels[i + c] * a / 255);
+        }
+    }
+    w = bm.bmWidth;
+    h = bm.bmHeight;
+    return pixels;
+}
+
 // Whether `path` is on a local drive (fixed, removable or a RAM disk), so its
 // icon can be read without waiting on the network: not a UNC share, a mapped
 // network drive, or anything else.
@@ -4621,354 +5095,6 @@ wuxm::ImageSource StartTile(int px) {
         }
     }
     return PixelsTile(std::move(pixels), px, px);
-}
-
-// =============================================================================
-// APP ICONS
-// =============================================================================
-// File Explorer and any other app can show the user's own icon, and every app a
-// squircle tile, as on a Mac. The taskbar reuses buttons and sets new icons, so
-// a replacement follows along, keeping the taskbar's own icon to put back. Both
-// are drawn bigger than their box, so their artwork matches other icons and
-// their shadows spill past.
-
-// Custom: the user's own icon for the app, from "App Icons". Plain: the
-// taskbar's own icon, replaced only if it came back too small (see
-// Undersized), with "Use High Resolution Icons" on and squircles off.
-enum class IconLook { Stock, Finder, Custom, Squircle, Plain };
-
-// What a bitmap loaded from, if it's a file or an address; empty otherwise.
-std::wstring UriText(wuxm::ImageSource const& source) {
-    auto bitmap = source ? source.try_as<wuxm::Imaging::BitmapImage>() : nullptr;
-    auto uri = bitmap ? bitmap.UriSource() : nullptr;
-    return uri ? std::wstring(uri.AbsoluteUri()) : std::wstring();
-}
-
-// Calls `changed` when the taskbar loads another icon into a bitmap it already
-// has, as it can when an app's windows open or close, without setting it on
-// the Image again: as it opens (decoded), or as its file or address changes.
-class StockWatch {
-public:
-    StockWatch() = default;
-    StockWatch(StockWatch const&) = delete;
-    StockWatch& operator=(StockWatch const&) = delete;
-    ~StockWatch() { Stop(); }
-
-    void Watch(wuxm::ImageSource const& source, std::function<void(wf::IInspectable const&)> changed) {
-        Stop();
-        auto bitmap = source ? source.try_as<wuxm::Imaging::BitmapImage>() : nullptr;
-        if (!bitmap) return;
-        bitmap_ = winrt::make_weak(bitmap);
-        opened_ = bitmap.ImageOpened(
-            winrt::auto_revoke,
-            [changed](wf::IInspectable const& sender, wux::RoutedEventArgs const&) {
-                if (!g_unloading) changed(sender);
-            });
-        uriToken_ = bitmap.RegisterPropertyChangedCallback(
-            wuxm::Imaging::BitmapImage::UriSourceProperty(),
-            [changed](wux::DependencyObject const& sender, wux::DependencyProperty const&) {
-                if (!g_unloading) changed(sender);
-            });
-    }
-
-    void Stop() {
-        opened_.revoke();
-        if (uriToken_) {
-            if (auto bitmap = bitmap_.get()) {
-                try {
-                    bitmap.UnregisterPropertyChangedCallback(
-                        wuxm::Imaging::BitmapImage::UriSourceProperty(), uriToken_);
-                } catch (...) {
-                }
-            }
-        }
-        uriToken_ = 0;
-        bitmap_ = nullptr;
-    }
-
-private:
-    winrt::weak_ref<wuxm::Imaging::BitmapImage> bitmap_;
-    wuxm::Imaging::BitmapImage::ImageOpened_revoker opened_;
-    int64_t uriToken_ = 0;
-};
-
-// For the icon of a button the taskbar's given to another app (see UpdateAppIcon).
-constexpr auto kNewAppIconWait = std::chrono::milliseconds(300);
-// The longest a new app's icon is kept out of sight while its tile's made.
-constexpr auto kHideNewIconFor = std::chrono::milliseconds(5000);
-
-struct IconSwap {
-    winrt::weak_ref<wuxc::Image> image;
-    winrt::weak_ref<wux::FrameworkElement> button;
-    IconLook look = IconLook::Stock;
-    int custom = -1;                   // Custom: its entry in "App Icons"
-    wuxm::ImageSource stock{nullptr};  // the taskbar's latest
-    wuxm::ImageSource shown{nullptr};  // what replaces it, once ready
-    wuxm::ScaleTransform transform{nullptr};  // the mod's, while a replacement shows
-    wf::IAsyncInfo render{nullptr};           // drawing the icon to make a tile from
-    bool rendering = false;
-    int generation = 0;  // up when a drawing in progress is of an icon since replaced
-    bool retry = false;  // drawn again on the retry timer, at `retryAt`
-    std::chrono::steady_clock::time_point retryAt{};
-    int retries = 0;
-    bool renderParent = false;  // drawing the icon alone was refused: what holds it is drawn
-    bool checked = false;       // Plain: its pixels looked at, for this icon
-    std::wstring tileUri;       // what the taskbar's icon loaded from, as its tile was made
-    std::wstring appId;         // the app its button was for, as last processed
-    std::chrono::steady_clock::time_point waitUntil{};  // for a new app's icon (see UpdateAppIcon)
-    winrt::weak_ref<wux::UIElement> hidden;  // what holds it, while its tile's made (HideTillMade)
-    std::chrono::steady_clock::time_point hiddenUntil{};
-    StockWatch watch;           // the taskbar's icon, loading anew
-};
-
-[[clang::no_destroy]] std::list<IconSwap> g_iconSwaps;
-[[clang::no_destroy]] std::optional<wuxm::ImageSource> g_finderIconSource;  // none if unreadable
-
-IconSwap* FindSwap(wux::FrameworkElement const& image) {
-    for (auto& s : g_iconSwaps) {
-        if (s.image.get() == image) return &s;
-    }
-    return nullptr;
-}
-
-// Whether its replacement is still to be made from the taskbar's icon's pixels.
-bool NeedsPixels(IconSwap const& s) {
-    return (s.look == IconLook::Squircle && !s.shown) || (s.look == IconLook::Plain && !s.checked);
-}
-
-// What was made from its icon dropped, along with any drawing of it still in
-// progress, to be made again.
-void ResetSwap(IconSwap& s) {
-    if (s.render) Try([&] { s.render.Cancel(); });
-    s.render = nullptr;
-    s.rendering = false;
-    s.generation++;
-    s.shown = nullptr;
-    s.tileUri.clear();
-    s.retry = false;
-    s.retries = 0;
-    s.renderParent = false;
-    s.checked = false;
-    s.waitUntil = {};
-}
-
-void CancelSquircleRenders() {
-    for (auto& s : g_iconSwaps) {
-        if (s.render) Try([&] { s.render.Cancel(); });
-        s.render = nullptr;
-    }
-}
-
-// The user's image, as a tile if it goes in one (see Squircled).
-wuxm::ImageSource CustomIconSource(CustomIcon const& icon, wux::UIElement const& el) {
-    return Squircled(icon) ? FileTile(icon.path, MagnifiedPixels(el, 1))
-                           : LoadImageFile(icon.path, MagnifiedPixels(el, icon.scale));
-}
-
-// Loaded once per entry. An unreadable image leaves Windows' own icon.
-[[clang::no_destroy]] std::vector<std::optional<wuxm::ImageSource>> g_appIconSources;
-
-wuxm::ImageSource AppIconSource(int i, wux::UIElement const& el) {
-    auto const& entries = g_settings.appIcons;
-    if (i < 0 || i >= (int)entries.size()) return nullptr;
-    if (g_appIconSources.size() != entries.size()) {
-        g_appIconSources.assign(entries.size(), std::nullopt);
-    }
-    auto& source = g_appIconSources[i];
-    if (!source) source = CustomIconSource(entries[i].icon, el);
-    return *source;
-}
-
-float AppIconScale(int i) {
-    auto const& entries = g_settings.appIcons;
-    return i >= 0 && i < (int)entries.size() ? CustomIconScale(entries[i].icon) : kMacIconScale;
-}
-
-// Loaded once. An unreadable custom image leaves Windows' own icon.
-wuxm::ImageSource FinderIconSource(wux::UIElement const& el) {
-    if (!g_finderIconSource) g_finderIconSource = CustomIconSource(g_settings.customFinder, el);
-    return *g_finderIconSource;
-}
-
-// With `custom`, its entry in "App Icons", for Custom.
-IconLook LookFor(wux::FrameworkElement const& button, int* custom = nullptr) {
-    if (custom) *custom = -1;
-    if (HasFinderIcon() && IsFileExplorer(button)) return IconLook::Finder;
-    if (!IsAppButton(button)) return IconLook::Stock;
-    if (int i = AppIconFor(button); i >= 0) {
-        if (custom) *custom = i;
-        return IconLook::Custom;
-    }
-    if (g_settings.squircleIcons) return IconLook::Squircle;
-    if (g_size.iconLoadSize > 0) return IconLook::Plain;
-    return IconLook::Stock;
-}
-
-// Tiles by the taskbar's icon they were made from. The taskbar can load another
-// icon into one it has, so each is also by what it loaded from, and forgotten
-// when it loads anew (see StockWatch). And it can give a button, bitmap and
-// all, to another app, so each is also by the app it was made for.
-struct CachedTile {
-    wuxm::ImageSource icon{nullptr};
-    std::wstring uri;
-    std::wstring appId;
-    wuxm::ImageSource tile{nullptr};
-    bool stale = false;
-    StockWatch watch;
-};
-
-[[clang::no_destroy]] std::list<CachedTile> g_squircleCache;
-
-// `icon` loaded anew, from `uri`: its tiles are out of date, unless it's the
-// same file again.
-void ForgetCachedSquircle(wf::IInspectable const& icon, std::wstring const& uri) {
-    for (auto& c : g_squircleCache) {
-        if (c.icon == icon && (uri.empty() || uri != c.uri)) c.stale = true;
-    }
-}
-
-wuxm::ImageSource CachedSquircle(wuxm::ImageSource const& stock, std::wstring const& appId) {
-    if (!stock) return nullptr;
-    auto uri = UriText(stock);
-    for (auto& c : g_squircleCache) {
-        if (!c.stale && c.icon == stock && c.uri == uri && c.appId == appId) return c.tile;
-    }
-    return nullptr;
-}
-
-void CacheSquircle(wuxm::ImageSource const& stock, std::wstring const& appId,
-                   wuxm::ImageSource const& tile) {
-    g_squircleCache.remove_if([&](CachedTile const& c) { return c.stale || c.icon == stock; });
-    auto& c = g_squircleCache.emplace_front();
-    c.icon = stock;
-    c.uri = UriText(stock);
-    c.appId = appId;
-    c.tile = tile;
-    c.watch.Watch(stock, [](wf::IInspectable const& sender) {
-        ForgetCachedSquircle(sender, UriText(sender.try_as<wuxm::ImageSource>()));
-    });
-    while (g_squircleCache.size() > kSquircleCacheSize) g_squircleCache.pop_back();
-}
-
-// ---- Settling ----
-// Tiles are made from the icons as drawn, which are in flux while the dock
-// starts up and the taskbar reloads its icons. So they wait till no icon has
-// changed for a second, or 5 seconds at most. Again after a settings change.
-
-constexpr auto kIconsQuietFor = std::chrono::milliseconds(1000);
-constexpr auto kIconsSettleWithin = std::chrono::milliseconds(5000);
-
-bool g_iconsSettling = true;
-bool g_iconsSettleStarted = false;
-std::chrono::steady_clock::time_point g_iconsSettleStart, g_iconsLastChange;
-[[clang::no_destroy]] winrt::Windows::System::DispatcherQueueTimer g_iconsSettleTimer{nullptr};
-
-void NoteIconChange() {
-    g_iconsLastChange = std::chrono::steady_clock::now();
-}
-
-void SettleIconsAgain() {
-    g_iconsSettling = true;
-    g_iconsSettleStarted = false;
-}
-
-void StopSettlingIcons() {
-    if (g_iconsSettleTimer) g_iconsSettleTimer.Stop();
-    g_iconsSettleTimer = nullptr;
-}
-
-// The retry timer, set for the soonest retry due, if any.
-void ArmSquircleRetry() {
-    HWND window = EnsureModWindow();
-    if (!window) return;
-    auto next = std::chrono::steady_clock::time_point::max();
-    for (auto& s : g_iconSwaps) {
-        if (s.retry) next = std::min(next, s.retryAt);
-        if (s.hidden.get()) next = std::min(next, s.hiddenUntil);
-    }
-    if (next == std::chrono::steady_clock::time_point::max()) {
-        KillTimer(window, kSquircleRetryTimer);
-        return;
-    }
-    auto wait = std::chrono::duration_cast<std::chrono::milliseconds>(
-        next - std::chrono::steady_clock::now());
-    SetTimer(window, kSquircleRetryTimer, (UINT)std::max<long long>(10, wait.count()), nullptr);
-}
-
-// ---- New apps' icons out of sight till their tiles are made ----
-// Rather than the taskbar's own icon first, then the tile. What holds the icon
-// is hidden, not the icon: a tile's made from a drawing of the icon, which
-// hiding it would leave blank. If drawing the icon alone is refused, what holds
-// it is drawn instead, and what holds that is hidden.
-
-wux::UIElement IconHolder(IconSwap const& s, wuxc::Image const& image) {
-    auto parent = wuxm::VisualTreeHelper::GetParent(image).try_as<wux::UIElement>();
-    if (!parent || !s.renderParent) return parent;
-    return wuxm::VisualTreeHelper::GetParent(parent).try_as<wux::UIElement>();
-}
-
-void ShowIconAgain(IconSwap& s) {
-    if (auto holder = s.hidden.get()) {
-        Try([&] { wuxh::ElementCompositionPreview::GetElementVisual(holder).Opacity(1); });
-    }
-    s.hidden = nullptr;
-    s.hiddenUntil = {};
-}
-
-// Hidden till its tile's made (or, for a plain icon, till it's been looked
-// at), for kHideNewIconFor at most. Not as the dock starts, when every icon
-// waits for the rest to settle (see WaitForIconsToSettle).
-void HideTillMade(IconSwap& s, wuxc::Image const& image) {
-    if (g_iconsSettling || !NeedsPixels(s)) return;
-    auto holder = IconHolder(s, image);
-    if (!holder || s.hidden.get() == holder) return;
-    auto until = s.hidden.get() ? s.hiddenUntil
-                                : std::chrono::steady_clock::now() + kHideNewIconFor;
-    ShowIconAgain(s);  // what held it before, if it's moved
-    wuxh::ElementCompositionPreview::GetElementVisual(holder).Opacity(0);
-    s.hidden = winrt::make_weak(holder);
-    s.hiddenUntil = until;
-    ArmSquircleRetry();
-}
-
-// Bigger while a replacement shows; the taskbar's own icon keeps its size.
-void ApplyIconScale(wux::FrameworkElement const& el) {
-    IconSwap* s = FindSwap(el);
-    if (!s) return;
-    auto dp = wux::UIElement::RenderTransformProperty();
-    bool replaced = s->shown && el.as<wuxc::Image>().Source() == s->shown;
-    bool ours = s->transform && el.RenderTransform() == s->transform;
-    if (!replaced || s->look == IconLook::Plain) {
-        if (ours) PutBack(el, dp);
-        return;
-    }
-    float k = s->look == IconLook::Finder   ? CustomIconScale(g_settings.customFinder)
-              : s->look == IconLook::Custom ? AppIconScale(s->custom)
-                                            : kMacIconScale;
-    float center = g_size.icon / 2;
-    if (ours && s->transform.ScaleX() == k && s->transform.CenterX() == center) return;
-    s->transform = wuxm::ScaleTransform();
-    s->transform.ScaleX(k);
-    s->transform.ScaleY(k);
-    s->transform.CenterX(center);
-    s->transform.CenterY(center);
-    el.RenderTransform(s->transform);
-}
-
-void ShowSwap(IconSwap& s, wuxc::Image const& image) {
-    auto source = s.shown ? s.shown : s.stock;
-    if (source && image.Source() != source) image.Source(source);
-    ApplyIconSize(image);
-    ApplyIconScale(image);
-}
-
-// Async work's callbacks run code from the mod. Each holds a count, which
-// unloading waits on after cancelling the work (see Wh_ModBeforeUninit).
-std::atomic<int> g_pendingCallbacks = 0;
-
-std::shared_ptr<void> TrackPendingCallback() {
-    g_pendingCallbacks++;
-    return std::shared_ptr<void>(nullptr, [](void*) { g_pendingCallbacks--; });
 }
 
 // For an icon that came back small: the app's icon as Start shows it, in its
@@ -5080,37 +5206,37 @@ void OnStockPixels(winrt::weak_ref<wuxc::Image> const& weak, wuxm::ImageSource c
     ShowIconAgain(*s);
 }
 
-// Checked a few times a second; once settled, the waiting icons are drawn.
-void WaitForIconsToSettle() {
-    auto now = std::chrono::steady_clock::now();
-    if (!g_iconsSettleStarted) {
-        g_iconsSettleStarted = true;
-        g_iconsSettleStart = g_iconsLastChange = now;
+std::vector<BYTE> BufferBytes(wss::IBuffer const& buffer) {
+    BYTE* data = nullptr;
+    winrt::check_hresult(buffer.as<IDockBufferByteAccess>()->Buffer(&data));
+    return std::vector<BYTE>(data, data + buffer.Length());
+}
+
+// Of `w` x `h` pixels drawn from something `whole` big, the part `rect` covers
+// (both in its own units). `w` and `h` become the part's size.
+std::vector<BYTE> CropPixels(std::vector<BYTE> const& pixels, int& w, int& h, wf::Rect rect,
+                             wf::Size whole) {
+    if (whole.Width <= 0 || whole.Height <= 0 || pixels.size() < (size_t)w * h * 4) {
+        w = h = 0;
+        return {};
     }
-    if (g_iconsSettleTimer) return;
-    auto queue = winrt::Windows::System::DispatcherQueue::GetForCurrentThread();
-    if (!queue) {
-        g_iconsSettling = false;
-        return;
+    float fx = w / whole.Width, fy = h / whole.Height;
+    int x0 = std::clamp((int)std::floor(rect.X * fx), 0, w);
+    int y0 = std::clamp((int)std::floor(rect.Y * fy), 0, h);
+    int x1 = std::clamp((int)std::ceil((rect.X + rect.Width) * fx), 0, w);
+    int y1 = std::clamp((int)std::ceil((rect.Y + rect.Height) * fy), 0, h);
+    if (x1 <= x0 || y1 <= y0) {
+        w = h = 0;
+        return {};
     }
-    g_iconsSettleTimer = queue.CreateTimer();
-    g_iconsSettleTimer.Interval(std::chrono::milliseconds(200));
-    g_iconsSettleTimer.IsRepeating(true);
-    g_iconsSettleTimer.Tick([](auto&&, auto&&) {
-        if (g_unloading) return;
-        auto now = std::chrono::steady_clock::now();
-        if (now - g_iconsLastChange < kIconsQuietFor &&
-            now - g_iconsSettleStart < kIconsSettleWithin) {
-            return;
-        }
-        StopSettlingIcons();
-        g_iconsSettling = false;
-        for (auto& s : g_iconSwaps) {
-            auto image = s.image.get();
-            if (image && NeedsPixels(s)) Try([&] { UpdateSwap(s, image); }, L"Squircle icon");
-        }
-    });
-    g_iconsSettleTimer.Start();
+    int cw = x1 - x0, ch = y1 - y0;
+    std::vector<BYTE> out((size_t)cw * ch * 4);
+    for (int y = 0; y < ch; y++) {
+        memcpy(&out[(size_t)y * cw * 4], &pixels[((size_t)(y0 + y) * w + x0) * 4], (size_t)cw * 4);
+    }
+    w = cw;
+    h = ch;
+    return out;
 }
 
 // Its own pixels if it's a bitmap the mod can read, or else the icon as drawn,
@@ -5190,330 +5316,6 @@ void RequestSquircle(IconSwap& s, wuxc::Image const& image) {
             }, L"Squircle icon");
         });
     });
-}
-
-void UpdateSwap(IconSwap& s, wuxc::Image const& image) {
-    if (s.look == IconLook::Finder) s.shown = FinderIconSource(image);
-    if (s.look == IconLook::Custom) s.shown = AppIconSource(s.custom, image);
-    if (s.look == IconLook::Squircle && !s.shown) {
-        s.shown = CachedSquircle(s.stock, s.appId);
-        if (s.shown) s.tileUri = UriText(s.stock);
-    }
-    ShowSwap(s, image);
-    if (NeedsPixels(s)) RequestSquircle(s, image);
-    if (!NeedsPixels(s)) ShowIconAgain(s);
-}
-
-// The taskbar loaded another icon into a bitmap it already had, without setting
-// it on the Image again: a tile made from what it held is out of date, unless
-// it's loaded from the same file again. Any drawing in progress is of the old
-// icon, so it's dropped.
-void OnStockChanged(wf::IInspectable const& sender) {
-    auto uri = UriText(sender.try_as<wuxm::ImageSource>());
-    ForgetCachedSquircle(sender, uri);
-    for (auto& s : g_iconSwaps) {
-        if (s.look != IconLook::Squircle && s.look != IconLook::Plain) continue;
-        if (!s.stock || s.stock != sender) continue;
-        if ((s.shown || s.checked) && !uri.empty() && uri == s.tileUri) continue;  // the same again
-        NoteIconChange();
-        ResetSwap(s);
-        if (auto image = s.image.get()) UpdateSwap(s, image);
-    }
-}
-
-// Only tiles and plain icons are made from the taskbar's icon, so only they
-// need to know when it changes in place.
-void WatchStock(IconSwap& s) {
-    if (s.look != IconLook::Squircle && s.look != IconLook::Plain) return s.watch.Stop();
-    s.watch.Watch(s.stock, [](wf::IInspectable const& sender) {
-        Try([&] { OnStockChanged(sender); }, L"Squircle icon");
-    });
-}
-
-// Icons not drawn yet, tried again when due.
-void RetrySquircles() {
-    auto now = std::chrono::steady_clock::now();
-    for (auto& s : g_iconSwaps) {
-        if (s.hidden.get() && s.hiddenUntil <= now) ShowIconAgain(s);  // its tile's too slow
-        if (!s.retry || s.retryAt > now) continue;
-        s.retry = false;
-        if (auto image = s.image.get()) Try([&] { UpdateSwap(s, image); }, L"Squircle icon");
-    }
-    ArmSquircleRetry();
-}
-
-// The taskbar set an icon: kept to put back, and replaced again.
-void OnIconSourceChanged(wux::FrameworkElement const& el) {
-    IconSwap* s = FindSwap(el);
-    if (!s) return;
-    auto image = el.as<wuxc::Image>();
-    auto source = image.Source();
-    if (source == s->shown || source == s->stock) return;
-    NoteIconChange();
-    auto dp = wuxc::Image::SourceProperty();
-    if (Override* o = FindOverride(el, dp)) o->original = image.ReadLocalValue(dp);
-    auto button = s->button.get();
-    s->stock = source;
-    s->custom = -1;
-    s->look = button ? LookFor(button, &s->custom) : IconLook::Stock;
-    if (button) s->appId = ButtonAppId(button);
-    ResetSwap(*s);
-    WatchStock(*s);
-    UpdateSwap(*s, image);
-}
-
-void UpdateAppIcon(wux::FrameworkElement const& el, wux::FrameworkElement const& button) {
-    auto image = el.try_as<wuxc::Image>();
-    if (!image) return;
-    auto dp = wuxc::Image::SourceProperty();
-    int custom = -1;
-    IconLook look = LookFor(button, &custom);
-    IconSwap* s = FindSwap(el);
-
-    if (look == IconLook::Stock) {
-        if (!s) return;
-        ShowIconAgain(*s);
-        g_iconSwaps.remove_if([&](IconSwap const& swap) { return &swap == s; });
-        Release(el, dp);
-        Release(el, wux::UIElement::RenderTransformProperty());
-        ApplyIconSize(el);
-        return;
-    }
-    bool fresh = !s;
-    if (!s) {
-        // A binding couldn't be put back once replaced.
-        auto original = image.ReadLocalValue(dp);
-        if (original && original.try_as<wux::Data::BindingExpression>()) return;
-        s = &g_iconSwaps.emplace_back();
-        s->image = winrt::make_weak(image);
-        s->stock = image.Source();
-        NoteIconChange();
-        Track(el, dp, OnIconSourceChanged);
-        Track(el, wux::UIElement::RenderTransformProperty(), ApplyIconScale);
-    }
-    s->button = winrt::make_weak(button);
-    auto appId = ButtonAppId(button);
-    if (s->look != look || s->custom != custom) {
-        s->look = look;
-        s->custom = custom;
-        ResetSwap(*s);
-        WatchStock(*s);
-    } else if (appId != s->appId && !s->appId.empty()) {
-        // The taskbar gave this button to another app, as when one opens and
-        // the rest move along. It can draw the new app's icon into the bitmap
-        // it has, without setting it anew, so what was made from the old one
-        // has to go. The new icon may still be on its way into the bitmap, so
-        // it's given a moment, unless there's a tile for it already.
-        NoteIconChange();
-        ResetSwap(*s);
-        fresh = true;
-        if (s->look != IconLook::Squircle || !CachedSquircle(s->stock, appId)) {
-            s->waitUntil = std::chrono::steady_clock::now() + kNewAppIconWait;
-            s->retry = true;
-            s->retryAt = s->waitUntil;
-            ArmSquircleRetry();
-        }
-    }
-    s->appId = appId;
-    UpdateSwap(*s, image);
-    if (fresh) HideTillMade(*s, image);
-}
-
-// Tiles are forgotten when their color or the size they're drawn at changes
-// since `old`, and drawn again as the buttons are next processed.
-void RecolorSquircles(Settings const& old) {
-    auto& s = g_settings;
-    bool same = old.size == s.size && old.scale == s.scale && old.tileColor == s.tileColor &&
-                std::equal(std::begin(s.tileLightColor), std::end(s.tileLightColor),
-                           std::begin(old.tileLightColor)) &&
-                std::equal(std::begin(s.tileDarkColor), std::end(s.tileDarkColor),
-                           std::begin(old.tileDarkColor)) &&
-                old.tileVibrance == s.tileVibrance &&
-                old.tileSheen == s.tileSheen && old.tileSheenOpacity == s.tileSheenOpacity &&
-                old.tileSheenSize == s.tileSheenSize &&
-                old.tileEdges == s.tileEdges && old.tileShadowSpread == s.tileShadowSpread &&
-                old.tileShadowDistance == s.tileShadowDistance &&
-                old.tileShadowOpacity == s.tileShadowOpacity &&
-                old.tileShadowDirection == s.tileShadowDirection &&
-                old.tileCorner == s.tileCorner && old.tileCornerRadius == s.tileCornerRadius &&
-                (s.tileColor != TileColor::Custom ||
-                 std::equal(std::begin(s.tileCustomColor), std::end(s.tileCustomColor),
-                            std::begin(old.tileCustomColor)));
-    // Plain icons are looked at again at the new size.
-    if (old.size != s.size || old.scale != s.scale) {
-        for (auto& swap : g_iconSwaps) {
-            if (swap.look != IconLook::Plain) continue;
-            swap.shown = nullptr;
-            swap.checked = false;
-            swap.retries = 0;
-        }
-    }
-    if (same) return;
-    g_squircleCache.clear();
-    for (auto& swap : g_iconSwaps) {
-        if (swap.look != IconLook::Squircle) continue;
-        swap.shown = nullptr;
-        swap.retries = 0;
-    }
-}
-
-// ---- Start ----
-// In the dock without "Hide Windows Start Button", it can show the user's own
-// icon, or with Squircle Icons on, a tile of the mod's own (see ModStartIcon).
-// Windows' is an animation, not an image, so it can't be made into a tile: it's
-// made transparent, and the mod's image goes over it in an Image of its own.
-// That's added as the plates are measured, as the taskbar doesn't like its tree
-// changing while it updates a button.
-
-struct StartIcon {
-    winrt::weak_ref<wux::FrameworkElement> stock;  // AnimatedVisualPlayer#Icon
-    winrt::weak_ref<wuxc::Panel> panel;            // where the image is
-    wuxc::Image image{nullptr};
-};
-
-[[clang::no_destroy]] std::optional<std::list<StartIcon>> g_startIcons{std::in_place};
-[[clang::no_destroy]] std::optional<wuxm::ImageSource> g_startIconSource;  // none if unreadable
-
-void ApplyTransparent(wux::FrameworkElement const& el) {
-    if (el.Opacity() != 0) el.Opacity(0);
-}
-
-// Windows' Start icon in `button`. Nothing on a layout it doesn't know: hiding
-// the wrong element could leave Start unusable.
-wux::FrameworkElement FindStockStartIcon(wux::FrameworkElement const& button) {
-    wux::FrameworkElement found{nullptr};
-    ForEachDescendant(button, 8, [&](wux::FrameworkElement const& el) {
-        if (found) return false;
-        if (el.Name() == L"Icon" &&
-            std::wstring_view(winrt::get_class_name(el)).find(L"AnimatedVisualPlayer") !=
-                std::wstring_view::npos) {
-            found = el;
-            return false;
-        }
-        return true;
-    });
-    return found;
-}
-
-void AddStartIcon(wux::FrameworkElement const& button) {
-    auto stock = FindStockStartIcon(button);
-    if (!stock) return;
-    for (auto& s : *g_startIcons) {
-        if (s.stock.get() == stock) return;
-    }
-    // The first panel above it, and its child that holds it.
-    wux::DependencyObject child = stock;
-    wuxc::Panel panel{nullptr};
-    while (child && child != button) {
-        auto parent = wuxm::VisualTreeHelper::GetParent(child);
-        if (!parent || parent == button) return;
-        panel = parent.try_as<wuxc::Panel>();
-        if (panel) break;
-        child = parent;
-    }
-    // Only over it in a grid; in another panel, the image would sit beside it.
-    uint32_t index;
-    auto holder = child.try_as<wux::FrameworkElement>();
-    auto grid = panel ? panel.try_as<wuxc::Grid>() : nullptr;
-    if (!grid || !holder || !panel.Children().IndexOf(holder, index)) return;
-
-    auto& custom = g_settings.customStart;
-    if (!g_startIconSource) {
-        g_startIconSource = HasStartIcon() ? CustomIconSource(custom, button)
-                                           : StartTile(MagnifiedPixels(button, 1));
-    }
-    if (!*g_startIconSource) return;  // unreadable: Windows' own stays
-    float k = CustomIconScale(custom);
-
-    wuxc::Image image;
-    image.Source(*g_startIconSource);
-    image.Stretch(wuxm::Stretch::Uniform);
-    image.Width(g_size.icon);
-    image.Height(g_size.icon);
-    image.HorizontalAlignment(wux::HorizontalAlignment::Center);
-    image.VerticalAlignment(wux::VerticalAlignment::Center);
-    image.IsHitTestVisible(false);
-    wuxm::ScaleTransform scale;
-    scale.ScaleX(k);
-    scale.ScaleY(k);
-    image.RenderTransformOrigin({0.5, 0.5});
-    image.RenderTransform(scale);
-    wuxc::Grid::SetRow(image, wuxc::Grid::GetRow(holder));
-    wuxc::Grid::SetColumn(image, wuxc::Grid::GetColumn(holder));
-    wuxc::Grid::SetRowSpan(image, wuxc::Grid::GetRowSpan(holder));
-    wuxc::Grid::SetColumnSpan(image, wuxc::Grid::GetColumnSpan(holder));
-    panel.Children().InsertAt(index + 1, image);
-    Track(stock, wux::UIElement::OpacityProperty(), ApplyTransparent);
-    ApplyTransparent(stock);
-    g_startIcons->push_back({winrt::make_weak(stock), winrt::make_weak(panel), image});
-}
-
-// Windows' own logo fills its box and sits a little low and left in it, so
-// beside macOS-style icons it looks too big and off center: it's shrunk and
-// moved up and right.
-constexpr float kStartLogoScale = 0.85f;
-constexpr float kStartLogoRaise = 0.02f;  // of the icon size: 1px at Size 70
-constexpr float kStartLogoShift = 0.02f;  // rightward, the same
-
-void ApplyStartLogoFit(wux::FrameworkElement const& el) {
-    float half = g_size.icon / 2, raise = -std::round(kStartLogoRaise * g_size.icon);
-    float shift = std::round(kStartLogoShift * g_size.icon);
-    auto have = el.RenderTransform().try_as<wuxm::CompositeTransform>();
-    if (have && have.ScaleX() == kStartLogoScale && have.ScaleY() == kStartLogoScale &&
-        have.CenterX() == half && have.CenterY() == half && have.TranslateX() == shift &&
-        have.TranslateY() == raise) {
-        return;
-    }
-    wuxm::CompositeTransform fit;
-    fit.CenterX(half);
-    fit.CenterY(half);
-    fit.ScaleX(kStartLogoScale);
-    fit.ScaleY(kStartLogoScale);
-    fit.TranslateX(shift);
-    fit.TranslateY(raise);
-    el.RenderTransform(fit);
-}
-
-// `el` is an icon in `button`: fitted if it's Start's own logo, showing.
-void UpdateStartLogo(wux::FrameworkElement const& el, wux::FrameworkElement const& button) {
-    if (!IsStartButton(button) ||
-        std::wstring_view(winrt::get_class_name(el)).find(L"AnimatedVisualPlayer") ==
-            std::wstring_view::npos) {
-        return;
-    }
-    auto dp = wux::UIElement::RenderTransformProperty();
-    if (g_settings.hideStart || ModStartIcon()) {
-        if (FindOverride(el, dp)) Release(el, dp);
-        return;
-    }
-    Track(el, dp, ApplyStartLogoFit);
-    ApplyStartLogoFit(el);
-}
-
-void RemoveStartIcons() {
-    if (!g_startIcons) return;
-    for (auto& s : *g_startIcons) {
-        if (auto stock = s.stock.get()) {
-            Try([&] { Release(stock, wux::UIElement::OpacityProperty()); });
-        }
-        auto panel = s.panel.get();
-        uint32_t index;
-        if (panel && s.image) Try([&] {
-            if (panel.Children().IndexOf(s.image, index)) panel.Children().RemoveAt(index);
-        });
-    }
-    g_startIcons->clear();
-    g_startIconSource.reset();
-}
-
-// While the plates are measured.
-void EnsureStartIcons() {
-    g_startIcons->remove_if([](StartIcon const& s) { return !s.stock.get(); });
-    if (!ModStartIcon()) return;
-    for (auto& b : *g_buttons) {
-        auto button = b.element.get();
-        if (button && IsStartButton(button)) Try([&] { AddStartIcon(button); }, L"Start icon");
-    }
 }
 
 // =============================================================================
@@ -5659,6 +5461,9 @@ void EmptyRecycleBin() {
     SHEmptyRecycleBinW(nullptr, nullptr, 0);
     CheckRecycleBinSoon();
 }
+
+void SuppressLabel();
+void StartFrames();
 
 // The Recycle Bin whose menu is open. The menu takes the pointer from the
 // taskbar, so the frame loop follows it instead.
@@ -5821,89 +5626,6 @@ void SetTrashScale(Plate& p, float s, float tx, float dividerTx) {
 }
 
 // =============================================================================
-// DRAGGING
-// =============================================================================
-// An app being rearranged, by the taskbar's own drag (which the hooks in
-// HOOKS: TASKBAR ELEMENTS follow).
-
-// While an app's dragged (the taskbar's own drag), nothing's magnified and the
-// dots are hidden.
-bool g_dragging = false;
-
-// The taskbar lifts a dragged app by growing it; it's kept at its size and
-// dimmed instead.
-constexpr double kDraggedOpacity = 0.7;
-
-winrt::weak_ref<wux::FrameworkElement> g_draggedButton, g_draggedIcon;
-double g_draggedIconOpacity = 1;
-
-void FlattenDragged() {
-    auto button = g_draggedButton.get();
-    if (!button) return;
-    std::vector<wux::UIElement> parts{button};
-    if (wuxm::VisualTreeHelper::GetChildrenCount(button) > 0) {
-        if (auto root = wuxm::VisualTreeHelper::GetChild(button, 0).try_as<wux::UIElement>()) {
-            parts.push_back(root);
-        }
-    }
-    if (auto icon = g_draggedIcon.get()) parts.push_back(icon);
-    for (auto& part : parts) {
-        auto visual = wuxh::ElementCompositionPreview::GetElementVisual(part);
-        for (PCWSTR property : {L"Scale", L"Scale.X", L"Scale.Y"}) visual.StopAnimation(property);
-        if (visual.Scale() != wf::Numerics::float3{1, 1, 1}) visual.Scale({1, 1, 1});
-    }
-}
-
-void DimDragged(wux::FrameworkElement const& button) {
-    g_draggedButton = winrt::make_weak(button);
-    g_draggedIcon = nullptr;
-    ForEachDescendant(button, 6, [](wux::FrameworkElement const& el) {
-        if (g_draggedIcon.get() || el.Name() != L"Icon") return true;
-        g_draggedIcon = winrt::make_weak(el);
-        g_draggedIconOpacity = el.Opacity();
-        el.Opacity(kDraggedOpacity);
-        return false;
-    });
-    FlattenDragged();
-}
-
-void UndimDragged() {
-    if (auto icon = g_draggedIcon.get()) icon.Opacity(g_draggedIconOpacity);
-    g_draggedButton = g_draggedIcon = nullptr;
-}
-
-// The dragged app follows the pointer (Windows moves it), so it doesn't slide
-// as the others move round it, nor as it's dropped into its place.
-constexpr float kDropSettleMs = 400;
-winrt::weak_ref<wux::FrameworkElement> g_droppedButton;
-float g_droppedAt = -kDropSettleMs;  // NowMs
-
-bool FollowsPointer(wux::FrameworkElement const& button) {
-    if (g_dragging && g_draggedButton.get() == button) return true;
-    return NowMs() < g_droppedAt + kDropSettleMs && g_droppedButton.get() == button;
-}
-
-void EndDragging() {
-    if (g_dragging && g_draggedButton.get()) {
-        g_droppedButton = g_draggedButton;
-        g_droppedAt = NowMs();
-    }
-    UndimDragged();
-    if (!g_dragging) return;
-    g_dragging = false;
-    for (auto& b : *g_buttons) {
-        if (auto el = b.element.get()) ReapplyButton(el);  // its dot back
-    }
-    MarkPlatesDirty();
-}
-
-// Ended without word from the taskbar, once the button's up.
-void CheckDragging() {
-    int primary = GetSystemMetrics(SM_SWAPBUTTON) ? VK_RBUTTON : VK_LBUTTON;
-    if (g_dragging && !(GetAsyncKeyState(primary) & 0x8000)) EndDragging();
-}
-
-// =============================================================================
 // RUNNING INDICATORS
 // =============================================================================
 // A round dot in place of Windows' pill. It lives beside the dock, not in the
@@ -5931,6 +5653,12 @@ struct Indicator {
 // Set while the plates are measured. Dots are only added then, as the taskbar
 // doesn't like its tree changing while it updates a button.
 bool g_measuringPlates = false;
+
+// While an app's dragged (the taskbar's own drag), nothing's magnified and the
+// dots are hidden.
+bool g_dragging = false;
+
+void ReapplyButton(wux::FrameworkElement const& button);
 
 Indicator* FindIndicator(wux::FrameworkElement const& button) {
     if (!g_indicators) return nullptr;
@@ -6172,6 +5900,79 @@ void HideDots() {
     for (auto& i : *g_indicators) HideDot(i);
 }
 
+// The taskbar lifts a dragged app by growing it; it's kept at its size and
+// dimmed instead.
+constexpr double kDraggedOpacity = 0.7;
+
+winrt::weak_ref<wux::FrameworkElement> g_draggedButton, g_draggedIcon;
+double g_draggedIconOpacity = 1;
+
+void FlattenDragged() {
+    auto button = g_draggedButton.get();
+    if (!button) return;
+    std::vector<wux::UIElement> parts{button};
+    if (wuxm::VisualTreeHelper::GetChildrenCount(button) > 0) {
+        if (auto root = wuxm::VisualTreeHelper::GetChild(button, 0).try_as<wux::UIElement>()) {
+            parts.push_back(root);
+        }
+    }
+    if (auto icon = g_draggedIcon.get()) parts.push_back(icon);
+    for (auto& part : parts) {
+        auto visual = wuxh::ElementCompositionPreview::GetElementVisual(part);
+        for (PCWSTR property : {L"Scale", L"Scale.X", L"Scale.Y"}) visual.StopAnimation(property);
+        if (visual.Scale() != wf::Numerics::float3{1, 1, 1}) visual.Scale({1, 1, 1});
+    }
+}
+
+void DimDragged(wux::FrameworkElement const& button) {
+    g_draggedButton = winrt::make_weak(button);
+    g_draggedIcon = nullptr;
+    ForEachDescendant(button, 6, [](wux::FrameworkElement const& el) {
+        if (g_draggedIcon.get() || el.Name() != L"Icon") return true;
+        g_draggedIcon = winrt::make_weak(el);
+        g_draggedIconOpacity = el.Opacity();
+        el.Opacity(kDraggedOpacity);
+        return false;
+    });
+    FlattenDragged();
+}
+
+void UndimDragged() {
+    if (auto icon = g_draggedIcon.get()) icon.Opacity(g_draggedIconOpacity);
+    g_draggedButton = g_draggedIcon = nullptr;
+}
+
+// The dragged app follows the pointer (Windows moves it), so it doesn't slide
+// as the others move round it, nor as it's dropped into its place.
+constexpr float kDropSettleMs = 400;
+winrt::weak_ref<wux::FrameworkElement> g_droppedButton;
+float g_droppedAt = -kDropSettleMs;  // NowMs
+
+bool FollowsPointer(wux::FrameworkElement const& button) {
+    if (g_dragging && g_draggedButton.get() == button) return true;
+    return NowMs() < g_droppedAt + kDropSettleMs && g_droppedButton.get() == button;
+}
+
+void EndDragging() {
+    if (g_dragging && g_draggedButton.get()) {
+        g_droppedButton = g_draggedButton;
+        g_droppedAt = NowMs();
+    }
+    UndimDragged();
+    if (!g_dragging) return;
+    g_dragging = false;
+    for (auto& b : *g_buttons) {
+        if (auto el = b.element.get()) ReapplyButton(el);  // its dot back
+    }
+    MarkPlatesDirty();
+}
+
+// Ended without word from the taskbar, once the button's up.
+void CheckDragging() {
+    int primary = GetSystemMetrics(SM_SWAPBUTTON) ? VK_RBUTTON : VK_LBUTTON;
+    if (g_dragging && !(GetAsyncKeyState(primary) & 0x8000)) EndDragging();
+}
+
 // Hides dots in `panel` whose buttons aren't among `icons`.
 void HideStrayDots(wuxc::Panel const& panel, std::vector<Icon> const& icons) {
     for (auto& i : *g_indicators) {
@@ -6381,6 +6182,9 @@ void BuildRow(wux::UIElement const& parent) {
 // LAYOUT
 // =============================================================================
 
+void MoveExplorerFirst(wux::FrameworkElement const& explorer);
+void NoteExplorerFirst();
+
 // The bin's room past the last app, as the row's margin, not the last button's,
 // so the taskbar sees each app at its real size when dragging. Kept on top of
 // any margin the taskbar sets.
@@ -6484,7 +6288,9 @@ ButtonLayout LayOutButtons(Plate& p, std::vector<Icon> const& icons) {
     return layout;
 }
 
+void NoteIconsMoving();
 bool g_inLayoutMeasure = false;  // see MeasureAfterLayout
+void ApplyTrayLooks();
 
 // As many dividers as `count`, added or removed at the end.
 void MatchDividerCount(Plate& p, wuxc::Panel const& panel, wux::UIElement const& row,
@@ -6535,6 +6341,8 @@ struct {
     float screen = 0;
     float off = 0;
 } g_naturalOffset;
+
+float TrayRoomFor(wux::XamlRoot const& root, bool background);
 
 // Whether Windows' taskbar settings center the icons, as the dock needs.
 bool TaskbarCentered() {
@@ -6641,12 +6449,6 @@ void FitPlate(Plate& p, std::vector<Icon> const& icons, size_t dividers) {
     }
     p.fitIcon = fit;
 }
-
-// =============================================================================
-// MEASURING
-// =============================================================================
-// Where the plate, the bin and the dividers go around the icons, measured as
-// if nothing were magnified, and again as the taskbar lays its buttons out.
 
 // Re-measures the plate around the icons, as if nothing were magnified.
 void MeasurePlate(Plate& p) {
@@ -6826,6 +6628,7 @@ void ApplyPlate(Plate& p, float extraLeft, float extra) {
 // layout pass, after the frame loop has measured them. What's changed is laid
 // out again before the frame's drawn. A few times a frame at most, so changes
 // that lead to more layout can't go round forever.
+extern int g_platesDirtyFrames;
 int g_frameNumber = 0;
 int g_layoutMeasuresFrame = -1, g_layoutMeasures = 0;
 
@@ -6921,10 +6724,6 @@ void RemovePlates() {
     g_plates->clear();
 }
 
-// #############################################################################
-// PART 4: BEHAVIOR
-// #############################################################################
-
 // =============================================================================
 // AUTO-HIDE
 // =============================================================================
@@ -6941,6 +6740,10 @@ float g_dockShown = 1;  // 0 hidden to 1 shown, animated
 int g_dockAwayTicks = 0;
 bool g_windowMaximized = false;  // for Hybrid
 bool g_taskViewOpen = false;
+
+void ScheduleOverWindows(bool autoHide);
+bool IsFlyout(HWND hwnd, bool popups);
+int StripHeight(UINT dpi);
 
 bool DockHides() {
     return g_settings.autoHide == AutoHide::On || g_taskViewOpen ||
@@ -7347,10 +7150,187 @@ Label g_label;
 bool g_labelSuppressed = false;  // by a menu, until the pointer leaves the dock
 bool g_labelDockLight = true;    // whether the dock it's over is light (see BubbleFill)
 
+// ---- Name ----
+
+// The first text in Windows' own tooltip: the app's name.
+std::wstring FirstText(wf::IInspectable const& value, int depth = 0) {
+    if (!value || depth > 4) return {};
+    if (auto s = value.try_as<wf::IPropertyValue>(); s && s.Type() == wf::PropertyType::String) {
+        return std::wstring(s.GetString());
+    }
+    if (auto text = value.try_as<wuxc::TextBlock>()) return std::wstring(text.Text());
+    if (auto control = value.try_as<wuxc::ContentControl>()) {
+        return FirstText(control.Content(), depth + 1);
+    }
+    if (auto panel = value.try_as<wuxc::Panel>()) {
+        for (auto const& child : panel.Children()) {
+            if (auto text = FirstText(child, depth + 1); !text.empty()) return text;
+        }
+    }
+    return {};
+}
+
+std::wstring AppName(wux::FrameworkElement const& button) {
+    std::wstring name = FirstText(wuxc::ToolTipService::GetToolTip(button));
+    if (name.empty()) {
+        // "App - 2 running windows", without the count.
+        name = wux::Automation::AutomationProperties::GetName(button);
+        size_t dash = name.rfind(L" - ");
+        if (dash != name.npos && std::any_of(name.begin() + dash, name.end(),
+                                             [](wchar_t c) { return iswdigit(c); })) {
+            name.resize(dash);
+        }
+    }
+    return name.substr(0, name.find(L'\n'));
+}
+
+// ---- Window ----
+
+void HideLabel() {
+    if (g_label.shown) ShowWindow(g_label.hwnd, SW_HIDE);
+    g_label.shown = false;
+}
+
+void SuppressLabel() {
+    g_labelSuppressed = true;
+    HideLabel();
+}
+
+void MatchGlassCaptureVisibility(HWND hwnd);
+
+HWND EnsureLabelWindow() {
+    if (g_label.hwnd) return g_label.hwnd;
+    if (!RegisterWindowClass()) return nullptr;
+    g_label.hwnd = CreateWindowEx(
+        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST,
+        kWindowClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, ModuleInstance(), nullptr);
+    // Its arrow reaches into the margin of screen Liquid Glass bends.
+    if (g_label.hwnd) MatchGlassCaptureVisibility(g_label.hwnd);
+    return g_label.hwnd;
+}
+
+void ForgetLabelFont();
+extern winrt::com_ptr<IDWriteFactory> g_dwrite;
+
+void DestroyLabel() {
+    if (g_label.hwnd) DestroyWindow(g_label.hwnd);
+    g_label = {};
+    ForgetLabelFont();
+    g_dwrite = nullptr;
+}
+
+// ---- Drawing ----
+
+// How much bigger than at kLabelFontSize the label is, by "Font Size": its
+// height, padding and arrow grow with its text.
+float LabelGrowth() {
+    return g_settings.tooltipFontSize / kLabelFontSize;
+}
+
+// The label's height, without its arrow, in view pixels.
+float LabelHeight() {
+    return kLabelHeight * LabelGrowth();
+}
+
+// The arrow's height under the label and cards, in view pixels: none with
+// "Show Tail" off.
+float LabelArrow() {
+    return g_settings.tooltipTail ? kLabelArrow * LabelGrowth() : 0;
+}
+
+// The corners' radius of a label `h` pixels tall: "Corner Radius" of its
+// height, up to fully round ends.
+float LabelRadius(float h) {
+    return std::min(g_settings.tooltipRadius / 100.0f * h, (h - 1) / 2);
+}
+
+// A box `w` by `h` with corners `radius` round, and, with "Show Tail" on, its
+// arrow, at `cx`, sized by `arrowScale`, as one outline. The arrow's three
+// corners are rounded.
+Outline BubbleOutline(float w, float h, float radius, float cx, float arrowScale) {
+    // A square corner is drawn as a tiny round one.
+    float i = 0.5f, r = std::max(radius, 0.25f), b = h - i;  // b is the box's bottom
+    float tipRound = kLabelArrowTip * arrowScale, baseRound = kLabelArrowBase * arrowScale;
+    wf::Point right{cx + kLabelArrowHalf * arrowScale, b}, tip{cx, b + kLabelArrow * arrowScale};
+    wf::Point left{cx - kLabelArrowHalf * arrowScale, b};
+
+    // `distance` from `from` toward `to`.
+    auto toward = [](wf::Point from, wf::Point to, float distance) {
+        float dx = to.X - from.X, dy = to.Y - from.Y, length = std::hypot(dx, dy);
+        return wf::Point{from.X + dx / length * distance, from.Y + dy / length * distance};
+    };
+
+    OutlineBuilder bubble;
+    bubble.Start({i, i + r});
+    bubble.ArcTo({i, i}, {i + r, i});
+    bubble.LineTo({w - i - r, i});
+    bubble.ArcTo({w - i, i}, {w - i, i + r});
+    bubble.LineTo({w - i, b - r});
+    bubble.ArcTo({w - i, b}, {w - i - r, b});
+    if (g_settings.tooltipTail) {
+        bubble.LineTo({right.X + baseRound, b});
+        bubble.BendTo(right, toward(right, tip, baseRound));
+        bubble.LineTo(toward(tip, right, tipRound));
+        bubble.BendTo(tip, toward(tip, left, tipRound));
+        bubble.LineTo(toward(left, tip, baseRound));
+        bubble.BendTo(left, {left.X - baseRound, b});
+    }
+    bubble.LineTo({i + r, b});
+    bubble.ArcTo({i, b}, {i, b - r});
+    return bubble.points;
+}
+
+// The fill: the tooltip color, or with none set, one that matches the dock,
+// light over a light dock and dark over a dark one.
+Color BubbleFill() {
+    if (g_settings.tooltipColorAuto) {
+        return g_labelDockLight ? kLabelFillOnLightDock : kLabelFillOnDarkDock;
+    }
+    auto [r, g, b] = g_settings.tooltipColor;
+    return {255, r, g, b};
+}
+
+// `outline` filled, in a clear `canvas`, and each side's glow or shadow over
+// it, as set, following its corners and arrow round as squircle tiles' do.
+// `reference` is the label's height on screen, which the glows' sizes are
+// shares of.
+void FillBubble(Canvas& canvas, Outline const& outline, float reference) {
+    canvas.Draw([&](ID2D1RenderTarget* target) { FillOutline(target, outline, BubbleFill()); });
+
+    std::array<InnerEdge, 4> edges;
+    bool any = false;
+    for (size_t side = 0; side < edges.size(); side++) {
+        TileEdge const& edge = g_settings.tooltipEdges[side];
+        if (edge.opacity <= 0 || edge.size <= 0) continue;
+        auto [r, g, b] = edge.color;
+        edges[side] = {{255, r, g, b}, edge.opacity / 100.0f, edge.size / 100.0f * reference};
+        any = true;
+    }
+    if (!any) return;
+
+    // The fill is opaque, so how much of each pixel the shape covers is the
+    // pixel's alpha. The glows are drawn on their own, then over the fill.
+    BYTE* pixels = canvas.Pixels();
+    std::vector<float> shape(canvas.PixelCount());
+    for (size_t i = 0; i < shape.size(); i++) shape[i] = pixels[i * 4 + 3] / 255.0f;
+    std::vector<BYTE> glows(shape.size() * 4, 0);
+    ApplyInnerEdges(glows, canvas.Width(), canvas.Height(), shape, edges);
+    DrawOver(pixels, glows.data(), shape.size());
+}
+
+// Its text's color, dark or light against the fill.
+Color LabelInk() {
+    Color fill = BubbleFill();
+    return IsLightColor(fill.R, fill.G, fill.B) ? kLabelInkOnLight : kLabelInkOnDark;
+}
+
 // ---- Font ----
 // The labels' and cards' text is drawn with DirectWrite: in Segoe UI, or, with
 // "Font" set to a font that's installed or to a font file, in that (OpenType
 // fonts with PostScript outlines, as many .otf files have, among them).
+
+template <typename F>
+F LoadSystemFunction(PCWSTR dll, PCSTR name);
 
 struct LabelFont {
     bool checked = false;  // whether "Font" has been looked for
@@ -7486,141 +7466,6 @@ void FindLabelFont() {
     Wh_Log(L"Tooltip font \"%s\" isn't installed: Segoe UI instead", name.c_str());
 }
 
-// ---- Window ----
-
-void HideLabel() {
-    if (g_label.shown) ShowWindow(g_label.hwnd, SW_HIDE);
-    g_label.shown = false;
-}
-
-void SuppressLabel() {
-    g_labelSuppressed = true;
-    HideLabel();
-}
-
-HWND EnsureLabelWindow() {
-    if (g_label.hwnd) return g_label.hwnd;
-    if (!RegisterWindowClass()) return nullptr;
-    g_label.hwnd = CreateWindowEx(
-        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST,
-        kWindowClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, ModuleInstance(), nullptr);
-    // Its arrow reaches into the margin of screen Liquid Glass bends.
-    if (g_label.hwnd) MatchGlassCaptureVisibility(g_label.hwnd);
-    return g_label.hwnd;
-}
-
-void DestroyLabel() {
-    if (g_label.hwnd) DestroyWindow(g_label.hwnd);
-    g_label = {};
-    ForgetLabelFont();
-    g_dwrite = nullptr;
-}
-
-// ---- Shape ----
-
-// How much bigger than at kLabelFontSize the label is, by "Font Size": its
-// height, padding and arrow grow with its text.
-float LabelGrowth() {
-    return g_settings.tooltipFontSize / kLabelFontSize;
-}
-
-// The label's height, without its arrow, in view pixels.
-float LabelHeight() {
-    return kLabelHeight * LabelGrowth();
-}
-
-// The arrow's height under the label and cards, in view pixels: none with
-// "Show Tail" off.
-float LabelArrow() {
-    return g_settings.tooltipTail ? kLabelArrow * LabelGrowth() : 0;
-}
-
-// The corners' radius of a label `h` pixels tall: "Corner Radius" of its
-// height, up to fully round ends.
-float LabelRadius(float h) {
-    return std::min(g_settings.tooltipRadius / 100.0f * h, (h - 1) / 2);
-}
-
-// A box `w` by `h` with corners `radius` round, and, with "Show Tail" on, its
-// arrow, at `cx`, sized by `arrowScale`, as one outline. The arrow's three
-// corners are rounded.
-Outline BubbleOutline(float w, float h, float radius, float cx, float arrowScale) {
-    // A square corner is drawn as a tiny round one.
-    float i = 0.5f, r = std::max(radius, 0.25f), b = h - i;  // b is the box's bottom
-    float tipRound = kLabelArrowTip * arrowScale, baseRound = kLabelArrowBase * arrowScale;
-    wf::Point right{cx + kLabelArrowHalf * arrowScale, b}, tip{cx, b + kLabelArrow * arrowScale};
-    wf::Point left{cx - kLabelArrowHalf * arrowScale, b};
-
-    // `distance` from `from` toward `to`.
-    auto toward = [](wf::Point from, wf::Point to, float distance) {
-        float dx = to.X - from.X, dy = to.Y - from.Y, length = std::hypot(dx, dy);
-        return wf::Point{from.X + dx / length * distance, from.Y + dy / length * distance};
-    };
-
-    OutlineBuilder bubble;
-    bubble.Start({i, i + r});
-    bubble.ArcTo({i, i}, {i + r, i});
-    bubble.LineTo({w - i - r, i});
-    bubble.ArcTo({w - i, i}, {w - i, i + r});
-    bubble.LineTo({w - i, b - r});
-    bubble.ArcTo({w - i, b}, {w - i - r, b});
-    if (g_settings.tooltipTail) {
-        bubble.LineTo({right.X + baseRound, b});
-        bubble.BendTo(right, toward(right, tip, baseRound));
-        bubble.LineTo(toward(tip, right, tipRound));
-        bubble.BendTo(tip, toward(tip, left, tipRound));
-        bubble.LineTo(toward(left, tip, baseRound));
-        bubble.BendTo(left, {left.X - baseRound, b});
-    }
-    bubble.LineTo({i + r, b});
-    bubble.ArcTo({i, b}, {i, b - r});
-    return bubble.points;
-}
-
-// The fill: the tooltip color, or with none set, one that matches the dock,
-// light over a light dock and dark over a dark one.
-Color BubbleFill() {
-    if (g_settings.tooltipColorAuto) {
-        return g_labelDockLight ? kLabelFillOnLightDock : kLabelFillOnDarkDock;
-    }
-    auto [r, g, b] = g_settings.tooltipColor;
-    return {255, r, g, b};
-}
-
-// `outline` filled, in a clear `canvas`, and each side's glow or shadow over
-// it, as set, following its corners and arrow round as squircle tiles' do.
-// `reference` is the label's height on screen, which the glows' sizes are
-// shares of.
-void FillBubble(Canvas& canvas, Outline const& outline, float reference) {
-    canvas.Draw([&](ID2D1RenderTarget* target) { FillOutline(target, outline, BubbleFill()); });
-
-    std::array<InnerEdge, 4> edges;
-    bool any = false;
-    for (size_t side = 0; side < edges.size(); side++) {
-        TileEdge const& edge = g_settings.tooltipEdges[side];
-        if (edge.opacity <= 0 || edge.size <= 0) continue;
-        auto [r, g, b] = edge.color;
-        edges[side] = {{255, r, g, b}, edge.opacity / 100.0f, edge.size / 100.0f * reference};
-        any = true;
-    }
-    if (!any) return;
-
-    // The fill is opaque, so how much of each pixel the shape covers is the
-    // pixel's alpha. The glows are drawn on their own, then over the fill.
-    BYTE* pixels = canvas.Pixels();
-    std::vector<float> shape(canvas.PixelCount());
-    for (size_t i = 0; i < shape.size(); i++) shape[i] = pixels[i * 4 + 3] / 255.0f;
-    std::vector<BYTE> glows(shape.size() * 4, 0);
-    ApplyInnerEdges(glows, canvas.Width(), canvas.Height(), shape, edges);
-    DrawOver(pixels, glows.data(), shape.size());
-}
-
-// Its text's color, dark or light against the fill.
-Color LabelInk() {
-    Color fill = BubbleFill();
-    return IsLightColor(fill.R, fill.G, fill.B) ? kLabelInkOnLight : kLabelInkOnDark;
-}
-
 // ---- Text ----
 // The label's and cards' text is gathered as runs, each one line in a box, and
 // drawn after the shapes, over them.
@@ -7753,7 +7598,8 @@ void PaintLabel(RECT const& rect, std::wstring const& content,
     }
     Canvas canvas(w, height);
     std::vector<TextRun> runs;
-    if (!canvas || !Try([&] { paint(canvas, runs); }, L"Label")) return;
+    // Not drawn: hidden, rather than left showing what it showed before.
+    if (!canvas || !Try([&] { paint(canvas, runs); }, L"Label")) return HideLabel();
     auto text = [&] {
         canvas.Draw([&](ID2D1RenderTarget* target) { DrawTextRuns(target, runs); });
     };
@@ -7828,6 +7674,9 @@ void DrawLabel(std::wstring const& text, POINT tip, float scale) {
 // quickly), which takes it only while the pointer's on an icon in the dock:
 // anywhere else, it goes to the app as usual. The hook sees every key, acts on
 // these two only, and keeps nothing.
+
+constexpr UINT kInfoKeyMessage = WM_APP + 8;    // Ctrl+I, over an icon
+constexpr UINT kInfoCloseMessage = WM_APP + 9;  // Esc, with a card open
 
 // Card sizes, in view pixels, apart from the label's own (see LABELS).
 constexpr float kCardPadX = 12;
@@ -8388,6 +8237,10 @@ ULONGLONG g_glassUnseenSince = 0;          // when no dock or tray was last show
 std::atomic<bool> g_glassWatching = false;
 std::atomic<bool> g_glassFramePosted = false;
 
+std::wstring UserValueName(PCWSTR name);
+void StartHotkeys();
+void StopHotkeys();
+
 bool GlassWanted() {
     return g_settings.glassStyle != GlassStyle::Off &&
            g_settings.dockLook.background != Background::None && !g_glassStopped &&
@@ -8460,6 +8313,18 @@ winrt::com_ptr<ID2D1Image> ColorScale(ID2D1DeviceContext* ctx, ID2D1Image* input
     SetEffectValue(effect.get(), 0, matrix);
     SetEffectValue(effect.get(), 2, (BOOL)clamp);
     return EffectOutput(effect.get());
+}
+
+// A function from a system DLL, looked up as the mod's headers or libraries
+// may lack it. The DLL is one the mod imports, so it's already loaded and no
+// reference is added; failing that, it's loaded from System32 only.
+template <typename F>
+F LoadSystemFunction(PCWSTR dll, PCSTR name) {
+    HMODULE module = GetModuleHandleW(dll);
+    if (!module) module = LoadLibraryExW(dll, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    auto f = module ? (F)GetProcAddress(module, name) : nullptr;
+    if (!f) winrt::throw_hresult(E_NOINTERFACE);
+    return f;
 }
 
 // Direct3D calls made outside Direct2D take its lock, as composition shares the
@@ -9393,6 +9258,12 @@ void SetGlassTimer(UINT ms) {
     if (SetTimer(w, kGlassTimer, ms, nullptr)) g_glassTickInterval = ms;
 }
 
+// In LIQUID GLASS: DOCKS AND TRAYS, after the tray's background, which it
+// draws into too.
+void UpdateGlass();
+void FollowGlass();
+void GlassTrayRevealed();
+
 // ---- Hotkeys ----
 // Win+Ctrl+Shift, as Windows' own Win+Ctrl+Shift+B: Ctrl+Shift+K alone is used
 // by apps (VS Code, Firefox), and a hotkey takes it from all of them.
@@ -9466,12 +9337,20 @@ void StopHotkeys() {
 winrt::event_token g_frameToken{};
 bool g_frameRunning = false;
 std::chrono::steady_clock::time_point g_lastFrame;
+int g_platesDirtyFrames = 0;  // frames left in which to re-measure the plates
+
+void ScanTaskbars();
+bool FollowPointerUnderTrashMenu();
+void UpdateDockFit();
+bool StepLaunchBounces();
 
 void StopFrames() {
     if (!g_frameRunning) return;
     wuxm::CompositionTarget::Rendering(g_frameToken);
     g_frameRunning = false;
 }
+
+void OnFrame();
 
 void StartFrames() {
     if (g_frameRunning) return;
@@ -9751,6 +9630,26 @@ bool TrayShown() {
     return g_settings.tray == Show::Visible || (g_settings.tray == Show::HotCorner && g_trayRevealed);
 }
 
+constexpr float kTrayPlateInsetX = 4;       // the background, in from the tray's items
+constexpr float kTrayPlateInsetY = 4;       // and its row, less Tray Padding (see TrayOffset)
+constexpr float kTrayLeftExtra = 4;         // more room on the left, where the first item
+                                            // (often the ^ button) draws right to its edge
+
+// How far the tray is moved up and left, by its row's margin: by Tray Padding,
+// so as its background grows by that around the icons and clock, it keeps its
+// distance (kTrayPlateInsetX and Y) from the screen's right and bottom edges.
+float TrayOffset() { return (float)g_settings.trayPadding; }
+
+// How far the tray's background reaches past its row, above and to the left.
+float TrayPlateAbove() { return std::max(0.0f, g_settings.trayPadding - kTrayPlateInsetY); }
+float TrayPlateLeft() {
+    return std::max(0.0f, g_settings.trayPadding + kTrayLeftExtra - kTrayPlateInsetX);
+}
+
+// How far up the tray reaches from the screen's bottom edge: its row, the
+// offset under it and its background past its top.
+double TrayRowSpan() { return kStockTaskbarHeight + TrayOffset() + TrayPlateAbove(); }
+
 void FixTrayRow(wux::FrameworkElement const& row) {
     Track(row, wux::FrameworkElement::HeightProperty());
     Track(row, wux::FrameworkElement::VerticalAlignmentProperty());
@@ -9922,6 +9821,7 @@ bool IsFlyout(HWND hwnd, bool popups) {
     LONG_PTR ex = GetWindowLongPtrW(root, GWL_EXSTYLE);
     return (ex & WS_EX_TOPMOST) && (style & WS_POPUP) && !(style & WS_CAPTION);
 }
+
 
 void UpdatePolling() {
     HWND w = EnsureModWindow();
@@ -10438,6 +10338,8 @@ void ProcessButton(wux::FrameworkElement const& button) {
     });
 }
 
+void HookTaskView();
+
 void NoteTaskbarFrame(wux::FrameworkElement const& frame) {
     if (!frame) return;
     for (auto& f : g_frames) {
@@ -10722,6 +10624,46 @@ float TrayRoomFor(wux::XamlRoot const& root, bool background) {
     return room;
 }
 
+// The dock at the largest size every taskbar has room for (see FITTING).
+void UpdateDockFit() {
+    if (!g_plates || g_unloading || g_dragging) return;
+    float fit = g_fullIcon;
+    bool measured = false;
+    for (auto& p : *g_plates) {
+        if (p.fitIcon <= 0) continue;
+        fit = std::min(fit, p.fitIcon);
+        measured = true;
+    }
+    if (!measured) return;
+    float want = fit < g_fullIcon ? fit : 0;
+    if (want == g_fitIcon) return;
+    // Bigger only once an app that's closed has gone, and the gap's closed:
+    // its icons growing as it slides away would look wrong.
+    float shown = g_fitIcon > 0 ? g_fitIcon : g_fullIcon;
+    if (fit > shown && NowMs() < g_closeHoldUntil + SlideMs()) {
+        MarkPlatesDirty();  // looked at again next frame
+        return;
+    }
+    g_fitIcon = want;
+    ComputeSizes();
+    if (want) Wh_Log(L"The dock shrinks to fit: icons %.0f px, of %.0f", want, g_fullIcon);
+    else Wh_Log(L"The dock fits at full size again");
+
+    // Changed in place, not taken down and built again as saving the settings
+    // does, so nothing flickers: the buttons, the bin and dividers resize, and
+    // the plates are measured and shaped again (see MeasurePlate).
+    Try(RemoveStartIcons);
+    g_finderIconSource.reset();  // drawn again at the new size
+    g_appIconSources.clear();
+    SettleIconsAgain();
+    Try(ReleaseStillIcons);
+    for (auto& b : *g_buttons) {
+        if (auto el = b.element.get()) Try([&] { ProcessButton(el); });
+    }
+    MarkPlatesDirty();
+    ApplyTrayLooks();  // its glows are sized by the dock's height
+}
+
 // ---- Opening the tray's menus ----
 // Quick Settings' and the clock's buttons (OmniButtons) open their menus only
 // when one of their icons is clicked: the few pixels Windows leaves between and
@@ -10948,48 +10890,6 @@ void ScanTaskbars() {
         ScanTray(frame);
     }
     if (!g_frames.empty()) StartInfoKeys();
-}
-
-// ---- Shrinking to fit ----
-
-// The dock at the largest size every taskbar has room for (see FITTING).
-void UpdateDockFit() {
-    if (!g_plates || g_unloading || g_dragging) return;
-    float fit = g_fullIcon;
-    bool measured = false;
-    for (auto& p : *g_plates) {
-        if (p.fitIcon <= 0) continue;
-        fit = std::min(fit, p.fitIcon);
-        measured = true;
-    }
-    if (!measured) return;
-    float want = fit < g_fullIcon ? fit : 0;
-    if (want == g_fitIcon) return;
-    // Bigger only once an app that's closed has gone, and the gap's closed:
-    // its icons growing as it slides away would look wrong.
-    float shown = g_fitIcon > 0 ? g_fitIcon : g_fullIcon;
-    if (fit > shown && NowMs() < g_closeHoldUntil + SlideMs()) {
-        MarkPlatesDirty();  // looked at again next frame
-        return;
-    }
-    g_fitIcon = want;
-    ComputeSizes();
-    if (want) Wh_Log(L"The dock shrinks to fit: icons %.0f px, of %.0f", want, g_fullIcon);
-    else Wh_Log(L"The dock fits at full size again");
-
-    // Changed in place, not taken down and built again as saving the settings
-    // does, so nothing flickers: the buttons, the bin and dividers resize, and
-    // the plates are measured and shaped again (see MeasurePlate).
-    Try(RemoveStartIcons);
-    g_finderIconSource.reset();  // drawn again at the new size
-    g_appIconSources.clear();
-    SettleIconsAgain();
-    Try(ReleaseStillIcons);
-    for (auto& b : *g_buttons) {
-        if (auto el = b.element.get()) Try([&] { ProcessButton(el); });
-    }
-    MarkPlatesDirty();
-    ApplyTrayLooks();  // its glows are sized by the dock's height
 }
 
 // =============================================================================
@@ -11289,6 +11189,8 @@ void OnTaskbarPointerMoved(wux::FrameworkElement const& frame,
     OnDockPointer(nullptr, [](wux::UIElement const&) { return wf::Point{}; });
 }
 
+void OnTaskbarPointerExited();
+
 // While the Recycle Bin's menu is open, from the cursor's position on screen,
 // over the taskbar the menu was opened on.
 bool FollowPointerUnderTrashMenu() {
@@ -11337,6 +11239,9 @@ void OnTaskbarPointerExited() {
 // =============================================================================
 // RESET
 // =============================================================================
+
+void RemoveAppBars();
+void ClipTaskbars();
 
 void ResetAll() {
     StopFrames();
@@ -11399,10 +11304,6 @@ void ResetAll() {
     g_indicators.reset();
     g_overrides.reset();
 }
-
-// #############################################################################
-// PART 5: WINDOWS
-// #############################################################################
 
 // =============================================================================
 // HOOKS: TASKBAR ELEMENTS
@@ -11645,6 +11546,7 @@ void WINAPI TaskListButton_OnDragCompletedGesture_Hook(void* pThis) {
 
 bool g_movingExplorer = false;
 winrt::weak_ref<wux::FrameworkElement> g_explorerMoved;  // this time round
+std::wstring UserValueName(PCWSTR name);
 
 using TaskListDragOperation_GetDropPlaceholder_t =
     void*(WINAPI*)(void* pThis, void* result, void* itemBounds, UINT64 itemRange,
@@ -12685,6 +12587,47 @@ constexpr UINT_PTR kTrayHideTimer = 2;
 bool g_managingAutoHide = false;
 bool g_autoHideBefore = false;
 
+std::wstring UserValueName(PCWSTR name) {
+    static std::wstring sid = [] {
+        std::wstring result;
+        HANDLE token;
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return result;
+        alignas(TOKEN_USER) BYTE buffer[sizeof(TOKEN_USER) + SECURITY_MAX_SID_SIZE];
+        DWORD size;
+        PWSTR text;
+        if (GetTokenInformation(token, TokenUser, buffer, sizeof(buffer), &size) &&
+            ConvertSidToStringSidW(((TOKEN_USER*)buffer)->User.Sid, &text)) {
+            result = text;
+            LocalFree(text);
+        }
+        CloseHandle(token);
+        return result;
+    }();
+    return std::wstring(name) + L"_" + sid;
+}
+
+// How far up from the screen's bottom edge the taskbar shows, in pixels at
+// 100%: the dock, or the tray if it's ever shown. The tray's menus open just
+// above it (see Menus::AboveTaskbarTop). Quick Settings is placed in its own
+// process, which reads it from what's saved here.
+constexpr PCWSTR kTaskbarTopValue = L"taskbarTop";
+
+double TrayRowSpan();
+
+int TaskbarTop() {
+    double top = std::max<double>(g_size.bottomGap + g_size.dockHeight, kStockTaskbarHeight);
+    if (g_settings.tray != Show::Hidden) top = std::max(top, TrayRowSpan());
+    return (int)std::ceil(top);
+}
+
+void SaveTaskbarTop() {
+    static int saved = -1;
+    int value = TaskbarTop();
+    if (value == saved) return;
+    saved = value;
+    Wh_SetIntValue(UserValueName(kTaskbarTopValue).c_str(), value);
+}
+
 using TrayUI__Hide_t = void(WINAPI*)(void* pThis);
 TrayUI__Hide_t TrayUI__Hide_Original;
 using CSecondaryTray__AutoHide_t = void(WINAPI*)(void* pThis, bool param1);
@@ -12721,6 +12664,13 @@ void WINAPI TrayUI__Hide_Hook(void* pThis) {
 void WINAPI CSecondaryTray__AutoHide_Hook(void* pThis, bool param1) {
     if (!KeepTaskbarShown()) return CSecondaryTray__AutoHide_Original(pThis, param1);
     // Otherwise kept shown: Windows' hide is skipped.
+}
+
+// The strip kept free: the dock and the gap under it, at least as tall as the
+// stock taskbar. The tray, when it shows, is added to it (see TaskbarRegion).
+int StripHeight(UINT dpi) {
+    float height = std::max(g_size.bottomGap + g_size.dockHeight, (float)kStockTaskbarHeight);
+    return MulDiv((int)std::ceil(height), dpi, 96);
 }
 
 // While an app's icon slides in or out of a shown dock, Windows' animation can
@@ -12858,12 +12808,6 @@ void ApplyMagnifyOverWindows() {
         RunFromWindowThread(tb, [](void*) { ScheduleOverWindows(true); }, nullptr);
     }
 }
-
-// =============================================================================
-// MOD WINDOW: MESSAGES
-// =============================================================================
-// What the rest of the mod posts to its window, and its timers, handled on
-// the taskbar's thread.
 
 LRESULT CALLBACK ModWindowProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -13183,10 +13127,6 @@ HMODULE WINAPI LoadLibraryExW_Hook(LPCWSTR name, HANDLE file, DWORD flags) {
     return module;
 }
 
-// #############################################################################
-// OTHER PROCESSES, AND WINDHAWK
-// #############################################################################
-
 // =============================================================================
 // START AND TRAY MENUS
 // =============================================================================
@@ -13290,6 +13230,10 @@ LONG AboveTaskbarTop(HMONITOR monitor, LONG top, LONG bottom) {
     int taskbar = g_host == Host::Explorer
                       ? ::TaskbarTop()
                       : Wh_GetIntValue(UserValueName(kTaskbarTopValue).c_str(), 0);
+    static std::atomic<int> logged = -1;  // [menus] logging, to be removed
+    if (logged.exchange(taskbar) != taskbar) {
+        Wh_Log(L"[menus] taskbar shows %d px up%s", taskbar, taskbar > 0 ? L"" : L": centered");
+    }
     if (taskbar <= 0) return ScreenMiddleTop(monitor, top, bottom);
     MONITORINFO info{.cbSize = sizeof(info)};
     GetMonitorInfo(monitor, &info);
