@@ -2,7 +2,7 @@
 // @id              macos-style-dock
 // @name            MacOS Style Dock
 // @description     Turns the Windows 11 taskbar into a macOS-style dock with magnifying icons
-// @version         1.2.5
+// @version         1.2.6
 // @author          Zach Vaughn
 // @github          https://github.com/zachvdev
 // @include         explorer.exe
@@ -170,7 +170,8 @@ middle of the dock stays clear, and its rim bends what's just inside it out to
 the edge:
 
 - **Lens**: a mirror image of the band inside the rim, squeezed toward the
-  edge, meeting the clear middle in a soft curve.
+  edge. Just inside where it folds, what's behind is stretched out toward the
+  fold, as on a Mac, easing into the clear middle in a soft curve.
 - **Reflection**: a true, unsqueezed mirror image, turning over tightly where
   it meets the middle, without a hard line.
 - **Stretch**: no mirror image; the inside of the rim is stretched out to the
@@ -248,15 +249,27 @@ mod's log says why, whenever the frosted glass is used instead.
   finished loading its icons. After that, a newly opened app's icon appears
   once its tile is ready, rather than Windows' icon first (or Windows' after
   5 seconds, if its tile isn't ready by then). If the taskbar never lets an
-  icon be drawn, its tile is made from the app's icon as Start shows it.
-- **Launch bounce.** As on a Mac, click an app that isn't open and its icon
-  bounces until its window appears, then settles with one last, lower bounce.
-  It stops after five bounces, for an app that opens no window. An app that's
-  open already keeps Windows' own bounce. Turn "Bounce Icons as Apps Open" off
-  to do without it.
-- **Still icons** (off by default). Windows bounces an app's icon as its
-  windows open, close, minimize or are restored. Turn on "Keep Icons Still"
-  to stop that; the launch bounce, which is the dock's own, stays.
+  icon be drawn, its tile is made from the app's icon as Start shows it. An
+  app keeps its tile as its windows open and close, as Windows reloads its
+  icon then, which would otherwise flicker as the tile's made again.
+- **Clicking icons.** Five settings, each on its own:
+  - **Shade Icons When Clicked** (on by default). As on a Mac, an icon
+    darkens while you hold the mouse button down on it, Trash's too.
+  - **MacOS Style Bounce** (on by default). As on a Mac, click an app that
+    isn't open and its icon bounces until its window appears, then settles
+    with one last, lower bounce. It stops after five bounces, for an app that
+    opens no window. An app that's open already gets Windows' own bounce
+    instead, if "Windows Bounce and Squish" is on.
+  - **Windows Bounce and Squish** (off by default). Windows bounces an app's
+    icon up or down as its windows open, close, minimize or are restored (as
+    you click it, among other times), and squishes it while it's pressed.
+    Off, the dock keeps its icons still instead.
+  - **Bounce Recycle Bin Icon** (off by default). The Recycle Bin bounces
+    once as it's clicked. Off, it never bounces, as Trash on a Mac.
+  - **Bounce File Explorer Icon** (off by default). File Explorer bounces and
+    squishes like any other app, as the two settings above have it. Off, it
+    never does while "Keep File Explorer First" keeps it on the far left, as
+    Finder on a Mac; anywhere else, it's an app like any other.
 
 ## File Explorer, Start and the Recycle Bin
 
@@ -640,7 +653,7 @@ ALTaleX's OpenGlass) showed how a taskbar can be given real refraction.
 - liquidGlass:
   - edgeStyle: "off"
     $name: Edge Style
-    $description: "Pick a style to turn on Liquid Glass, which makes the dock's rim bend what's behind it like real glass. Two downsides: 1) It's slightly delayed, trailing what's behind the dock by a frame or two, as it bends a picture of the screen. 2) It doesn't work with screen captures: while it's on, the taskbar disappears from screenshots, recordings and screen sharing (Win+Ctrl+Shift+G freezes the glass so the dock shows up; Win+Ctrl+Shift+K turns it off in an emergency). If either is a problem for you, leave this Off for the plain frosted glass. Lens mirrors the rim, squeezed toward the edge; Reflection is a true mirror; Stretch stretches the rim outward. (Default = Off)"
+    $description: "Pick a style to turn on Liquid Glass, which makes the dock's rim bend what's behind it like real glass. Two downsides: 1) It's slightly delayed, trailing what's behind the dock by a frame or two, as it bends a picture of the screen. 2) It doesn't work with screen captures: while it's on, the taskbar disappears from screenshots, recordings and screen sharing (Win+Ctrl+Shift+G freezes the glass so the dock shows up; Win+Ctrl+Shift+K turns it off in an emergency). If either is a problem for you, leave this Off for the plain frosted glass. Lens mirrors the rim, squeezed toward the edge, and stretches what's just inside toward the fold; Reflection is a true mirror; Stretch stretches the rim outward. (Default = Off)"
     $options:
     - "off": "Off"
     - lens: Lens
@@ -648,7 +661,7 @@ ALTaleX's OpenGlass) showed how a taskbar can be given real refraction.
     - stretch: Stretch
   - edgeDepth: 17
     $name: Edge Depth (2-100)
-    $description: How deep the bent rim is, in pixels at 100% scaling, and never past a quarter of the dock's height. (Default = 17)
+    $description: How deep the bent rim is, in pixels at 100% scaling, and never past a quarter of the dock's height. Lens's stretch reaches about 1.6 times as deep. (Default = 17)
   - edgeStrength: 120
     $name: Edge Strength (0-150)
     $description: How far the rim reaches in for what it shows; lower bends less. Above 100, Stretch starts to mirror at the very edge. (Default = 120)
@@ -830,7 +843,7 @@ ALTaleX's OpenGlass) showed how a taskbar can be given real refraction.
     $description: Removes Start from the dock. (Default = Enabled)
   - explorerFirst: true
     $name: Keep File Explorer First
-    $description: Keeps File Explorer on the far left. (Default = Enabled)
+    $description: Keeps File Explorer on the far left, as Finder, where it doesn't bounce or squish unless Bounce File Explorer Icon is on. (Default = Enabled)
   - recycleBin: true
     $name: Keep Recycle Bin in Dock
     $description: Adds the Recycle Bin on the far right. (Default = Enabled)
@@ -848,12 +861,21 @@ ALTaleX's OpenGlass) showed how a taskbar can be given real refraction.
     - hybrid: Hybrid Dots
     - windows: Windows 11 Style
     - none: None
+  - shadeIcons: true
+    $name: Shade Icons When Clicked
+    $description: As on a Mac, an icon darkens while the mouse button is held down on it. (Default = Enabled)
   - launchBounce: true
-    $name: Bounce Icons as Apps Open
-    $description: As on a Mac, clicking an app that isn't open bounces its icon until its window appears, five times at most. Apps that are open already keep Windows' own bounce. (Default = Enabled)
-  - keepIconsStill: false
-    $name: Keep Icons Still
-    $description: Turns off the bounce Windows gives an app's icon as it opens, closes, minimizes or is restored. (Default = Disabled)
+    $name: MacOS Style Bounce
+    $description: As on a Mac, clicking an app that isn't open bounces its icon until its window appears, five times at most. (Default = Enabled)
+  - windowsIconAnimations: false
+    $name: Windows Bounce and Squish
+    $description: Windows' own animations of the dock's icons, the bounce up or down as an app opens, closes, minimizes or is restored, and the squish while an icon is pressed. Off keeps the icons still. (Default = Disabled)
+  - bounceRecycleBin: false
+    $name: Bounce Recycle Bin Icon
+    $description: Bounces the Recycle Bin's icon once as it's clicked. Off, it never bounces, as Trash on a Mac. (Default = Disabled)
+  - bounceExplorer: false
+    $name: Bounce File Explorer Icon
+    $description: Lets File Explorer bounce and squish like any other app while Keep File Explorer First keeps it on the far left. Off, it never does there, as Finder on a Mac. (Default = Disabled)
   - previews: false
     $name: See Window Previews
     $description: Shows window previews on hover. (Default = Disabled)
@@ -1182,8 +1204,12 @@ struct Settings {
     bool dividerBeforeTrash;
     std::vector<int> customDividers;  // after these icons, counted from 1; sorted
     bool squircleIcons;
+    bool shadeIcons;      // an icon darkens while pressed
     bool launchBounce;    // an app's icon bounces as it's opened from the dock
-    bool keepIconsStill;  // no bounce as apps open, close, minimize or are restored
+    bool bounceTrash;     // the Recycle Bin's icon bounces once as it's clicked
+    bool bounceExplorer;  // File Explorer kept first bounces and squishes as other apps do
+    bool windowsAnimations;  // Windows' bounce as apps open, close, minimize or are restored,
+                             // and its shrink as an icon's pressed
     TileColor tileColor;
     uint8_t tileCustomColor[3];
     uint8_t tileLightColor[3], tileDarkColor[3];  // the tiles Light and Dark give
@@ -1391,8 +1417,11 @@ void LoadSettings() {
     std::sort(s.customDividers.begin(), s.customDividers.end());
     s.customDividers.erase(std::unique(s.customDividers.begin(), s.customDividers.end()),
                            s.customDividers.end());
+    s.shadeIcons = Wh_GetIntSetting(L"dockItems.shadeIcons");
     s.launchBounce = Wh_GetIntSetting(L"dockItems.launchBounce");
-    s.keepIconsStill = Wh_GetIntSetting(L"dockItems.keepIconsStill");
+    s.bounceTrash = Wh_GetIntSetting(L"dockItems.bounceRecycleBin");
+    s.bounceExplorer = Wh_GetIntSetting(L"dockItems.bounceExplorer");
+    s.windowsAnimations = Wh_GetIntSetting(L"dockItems.windowsIconAnimations");
 
     s.squircleIcons = Wh_GetIntSetting(L"squircleIcons.enabled");
     s.tileColor = (TileColor)ChoiceSetting(
@@ -1596,7 +1625,7 @@ void ComputeSizes() {
     float dockTop = z.bottomGap + z.dockHeight;
     float iconTop = z.bottomGap + z.padY + s.scale * icon;
     float bounce = s.scale * icon * kBounceRoom;
-    float launchBounce = s.launchBounce ? icon * kLaunchBounceHeight : 0;
+    float launchBounce = s.launchBounce || s.bounceTrash ? icon * kLaunchBounceHeight : 0;
     if (launchBounce > bounce + 0.01f) bounce = launchBounce;
     int height = std::max((int)std::ceil(std::max(dockTop, iconTop) + 2), kMinTaskbarHeight);
     g_taskbarHeight = std::max(height, (int)std::ceil(iconTop + bounce));
@@ -1712,6 +1741,20 @@ bool IsAppButton(wux::FrameworkElement const& el) {
 bool IsFileExplorer(wux::FrameworkElement const& button) {
     return wux::Automation::AutomationProperties::GetAutomationId(button) ==
            L"Appid: Microsoft.Windows.Explorer";
+}
+
+// File Explorer as Finder: kept on the far left ("Keep File Explorer First"),
+// it doesn't bounce, or shrink as it's pressed (see PRESSED ICONS), as Finder
+// on a Mac, unless "Bounce File Explorer Icon" is on. Anywhere else, it's an
+// app like any other.
+bool IsFinder(wux::FrameworkElement const& button) {
+    return g_settings.explorerFirst && IsFileExplorer(button);
+}
+
+// Finder, kept from bouncing and squishing, unless "Bounce File Explorer Icon"
+// lets it, as other apps.
+bool FinderKeptStill(wux::FrameworkElement const& button) {
+    return IsFinder(button) && !g_settings.bounceExplorer;
 }
 
 bool IsStartButton(wux::FrameworkElement const& button) {
@@ -2218,6 +2261,7 @@ struct Button {
     float pressedAt = -1e9f;              // NowMs, when last pressed
     bool openAtPress = false;             // whether its app was open then
     wf::IInspectable pressed{nullptr}, tapped{nullptr};  // its handlers (see WatchClicks)
+    wf::IInspectable released{nullptr};  // released, canceled, lost or left (see WatchClicks)
 };
 
 [[clang::no_destroy]] std::optional<std::list<Button>> g_buttons{std::in_place};
@@ -2306,9 +2350,15 @@ void ReleaseButton(Button& b) {
         Try([&] {
             if (b.pressed) el.RemoveHandler(wux::UIElement::PointerPressedEvent(), b.pressed);
             if (b.tapped) el.RemoveHandler(wux::UIElement::TappedEvent(), b.tapped);
+            if (b.released) {
+                el.RemoveHandler(wux::UIElement::PointerReleasedEvent(), b.released);
+                el.RemoveHandler(wux::UIElement::PointerCanceledEvent(), b.released);
+                el.RemoveHandler(wux::UIElement::PointerCaptureLostEvent(), b.released);
+                el.RemoveHandler(wux::UIElement::PointerExitedEvent(), b.released);
+            }
         });
     }
-    b.pressed = b.tapped = nullptr;
+    b.pressed = b.tapped = b.released = nullptr;
     auto grid = b.root.get() ? b.root.get().try_as<wuxc::Grid>() : nullptr;
     if (!grid || b.originalIconColumn <= 0 || grid.ColumnDefinitions().Size() == 0) return;
     auto column = grid.ColumnDefinitions().GetAt(0);
@@ -3350,6 +3400,7 @@ struct Plate {
     float lastLeft = 0, lastRight = 0, lastTrash = 0;
     Slide slideLeft, slideRight, slideTrash;
     float trashScale = 1, trashShift = 0, trashGapShift = 0;  // magnification's
+    float trashLift = 0;  // how far up its bounce has it (see StartTrashBounce)
     wux::FrameworkElement::ActualThemeChanged_revoker panelThemeChanged;
 
     // The Recycle Bin and its divider, in the panel past the last button.
@@ -3364,6 +3415,11 @@ struct Plate {
     wux::UIElement::DragEnter_revoker trashDragEnter;
     wux::UIElement::DragOver_revoker trashDragOver;
     wux::UIElement::Drop_revoker trashDrop;
+    wux::UIElement::PointerPressed_revoker trashPressed;  // darkened while pressed
+    wux::UIElement::PointerReleased_revoker trashReleased;
+    wux::UIElement::PointerCanceled_revoker trashCanceled;
+    wux::UIElement::PointerCaptureLost_revoker trashCaptureLost;
+    wux::UIElement::PointerExited_revoker trashExited;
     float trashCenter = 0;  // in the row
     wux::Thickness rowMargin{};  // the taskbar's own, before the bin's room
     float rowRoom = 0;
@@ -3568,6 +3624,7 @@ struct IconSwap {
     bool renderParent = false;  // drawing the icon alone was refused: what holds it is drawn
     bool checked = false;       // Plain: its pixels looked at, for this icon
     std::wstring tileUri;       // what the taskbar's icon loaded from, as its tile was made
+    std::chrono::steady_clock::time_point tileMadeAt{};  // its tile's, if any (see KeepsTile)
     std::wstring appId;         // the app its button was for, as last processed
     std::chrono::steady_clock::time_point waitUntil{};  // for a new app's icon (see UpdateAppIcon)
     winrt::weak_ref<wux::UIElement> hidden;  // what holds it, while its tile's made (HideTillMade)
@@ -3589,6 +3646,7 @@ void ResetSwap(IconSwap& s) {
     s.generation++;
     s.shown = nullptr;
     s.tileUri.clear();
+    s.tileMadeAt = {};
     s.retry = false;
     s.retries = 0;
     s.renderParent = false;
@@ -3922,6 +3980,13 @@ wuxm::ImageSource FinderIconSource(wux::UIElement const& el) {
     return *g_finderIconSource;
 }
 
+// How much bigger than the taskbar's own icon a replacement shows.
+float ReplacementScale(IconSwap const& s) {
+    return s.look == IconLook::Finder   ? CustomIconScale(g_settings.customFinder)
+           : s.look == IconLook::Custom ? AppIconScale(s.custom)
+                                        : kMacIconScale;
+}
+
 // Bigger while a replacement shows; the taskbar's own icon keeps its size.
 void ApplyIconScale(wux::FrameworkElement const& el) {
     IconSwap* s = FindSwap(el);
@@ -3933,9 +3998,7 @@ void ApplyIconScale(wux::FrameworkElement const& el) {
         if (ours) PutBack(el, dp);
         return;
     }
-    float k = s->look == IconLook::Finder   ? CustomIconScale(g_settings.customFinder)
-              : s->look == IconLook::Custom ? AppIconScale(s->custom)
-                                            : kMacIconScale;
+    float k = ReplacementScale(*s);
     float center = g_size.icon / 2;
     if (ours && s->transform.ScaleX() == k && s->transform.CenterX() == center) return;
     s->transform = wuxm::ScaleTransform();
@@ -3974,11 +4037,28 @@ void UpdateSwap(IconSwap& s, wuxc::Image const& image) {
     if (s.look == IconLook::Custom) s.shown = AppIconSource(s.custom, image);
     if (s.look == IconLook::Squircle && !s.shown) {
         s.shown = CachedSquircle(s.stock, s.appId);
-        if (s.shown) s.tileUri = UriText(s.stock);
+        if (s.shown) {
+            s.tileUri = UriText(s.stock);
+            s.tileMadeAt = std::chrono::steady_clock::now();
+        }
     }
     ShowSwap(s, image);
     if (NeedsPixels(s)) RequestSquircle(s, image);
     if (!NeedsPixels(s)) ShowIconAgain(s);
+}
+
+// Whether the tile showing is kept as the taskbar loads its app's icon anew,
+// as it does as the app's windows open and close. A tile's made from the icon
+// as drawn, so making it again would show the taskbar's own icon first, for a
+// few frames: a flicker, for what's the same app. Not for a tile made in the
+// last few seconds, which may be of an icon that was still on its way in (see
+// UpdateAppIcon), nor once the button's another app's.
+constexpr auto kTileKeptAfter = std::chrono::seconds(5);
+
+bool KeepsTile(IconSwap const& s, wux::FrameworkElement const& button) {
+    return s.look == IconLook::Squircle && s.shown && s.tileMadeAt.time_since_epoch().count() &&
+           std::chrono::steady_clock::now() - s.tileMadeAt > kTileKeptAfter &&
+           !s.appId.empty() && ButtonAppId(button) == s.appId;
 }
 
 // The taskbar set an icon: kept to put back, and replaced again.
@@ -3992,9 +4072,18 @@ void OnIconSourceChanged(wux::FrameworkElement const& el) {
     auto dp = wuxc::Image::SourceProperty();
     if (Override* o = FindOverride(el, dp)) o->original = image.ReadLocalValue(dp);
     auto button = s->button.get();
+    int custom = -1;
+    IconLook look = button ? LookFor(button, &custom) : IconLook::Stock;
+    if (look == s->look && custom == s->custom && button && KeepsTile(*s, button)) {
+        s->stock = source;
+        s->tileUri = UriText(source);
+        WatchStock(*s);
+        ShowSwap(*s, image);  // the tile again, over the taskbar's
+        return;
+    }
     s->stock = source;
-    s->custom = -1;
-    s->look = button ? LookFor(button, &s->custom) : IconLook::Stock;
+    s->custom = custom;
+    s->look = look;
     if (button) s->appId = ButtonAppId(button);
     ResetSwap(*s);
     WatchStock(*s);
@@ -4928,6 +5017,10 @@ void OnStockChanged(wf::IInspectable const& sender) {
         if (s.look != IconLook::Squircle && s.look != IconLook::Plain) continue;
         if (!s.stock || s.stock != sender) continue;
         if ((s.shown || s.checked) && !uri.empty() && uri == s.tileUri) continue;  // the same again
+        if (auto button = s.button.get(); button && KeepsTile(s, button)) {
+            s.tileUri = uri;
+            continue;
+        }
         NoteIconChange();
         ResetSwap(s);
         if (auto image = s.image.get()) UpdateSwap(s, image);
@@ -5124,6 +5217,7 @@ bool SquircleFromShell(IconSwap& s, wuxc::Image const& image) {
     if (!tile.size) return false;
     s.shown = BitmapFromPixels(tile.size, tile.size, tile.pixels);
     s.tileUri = UriText(s.stock);
+    s.tileMadeAt = std::chrono::steady_clock::now();
     ShowSwap(s, image);
     ShowIconAgain(s);
     return true;
@@ -5201,6 +5295,7 @@ void OnStockPixels(winrt::weak_ref<wuxc::Image> const& weak, wuxm::ImageSource c
     if (!tile.size) return RetrySquircleSoon(*s);
     s->shown = BitmapFromPixels(tile.size, tile.size, tile.pixels);
     s->tileUri = UriText(stock);
+    s->tileMadeAt = std::chrono::steady_clock::now();
     CacheSquircle(stock, s->appId, s->shown);
     ShowSwap(*s, image);
     ShowIconAgain(*s);
@@ -5316,6 +5411,265 @@ void RequestSquircle(IconSwap& s, wuxc::Image const& image) {
             }, L"Squircle icon");
         });
     });
+}
+
+// =============================================================================
+// PRESSED ICONS
+// =============================================================================
+// As on a Mac, with "Shade Icons When Clicked" on, every app's icon darkens
+// while pressed, and Trash's too. A dark
+// shade in the icon's own shape is drawn over it, from a live copy of the icon
+// as drawn (a visual surface), in what holds the icon, where it's placed, sized
+// and transformed as the icon is. Windows shrinks an app's icon as it's
+// pressed: Finder's is held at its size instead (see HoldIconSize), as is every
+// app's with "Windows Bounce and Squish" off. The taskbar can take the pointer as
+// it's pressed, so the release isn't always heard: each frame, a press by mouse
+// ends once no mouse button is down.
+
+constexpr float kPressShade = 0.4f;  // how dark: the shade's opacity
+constexpr auto kHoldSizeAfter = std::chrono::milliseconds(400);  // once let go of
+constexpr auto kShadeLingers = std::chrono::milliseconds(50);    // once let go of
+
+// How Windows was found shrinking Finder's icon (see HoldIconSize), for the log.
+enum : unsigned {
+    kShrankByTransition = 1,  // XAML's Scale, animated
+    kShrankByScale = 2,       // XAML's Scale
+    kShrankByVisual = 4,      // its visual's Scale
+    kShrankHolder = 8,        // what holds it, either way
+    kShrankByTransform = 16,  // the dock's own transform of a replaced icon, animated
+};
+
+struct IconPress {
+    // The shade.
+    winrt::weak_ref<wux::UIElement> host;  // what holds the icon, the shade drawn in it
+    wuc::Visual sprite{nullptr};
+    wuc::CompositionVisualSurface surface{nullptr};
+    bool mouse = false;  // pressed with a mouse button: let go of once none is down
+    bool down = false;
+    std::chrono::steady_clock::time_point shadeUntil{};  // once let go of
+    // Finder's icon, held at its size while pressed, and a moment after.
+    winrt::weak_ref<wux::FrameworkElement> held;
+    wux::Vector3Transition scaleTransition{nullptr};  // its Scale animation, to put back
+    bool transitionCleared = false;
+    std::chrono::steady_clock::time_point holdUntil{};
+    unsigned found = 0;
+};
+
+[[clang::no_destroy]] IconPress g_iconPress;
+winrt::event_token g_iconPressToken{};
+bool g_watchingPress = false;
+
+bool MouseButtonDown() {
+    for (int key : {VK_LBUTTON, VK_RBUTTON, VK_MBUTTON}) {
+        if (GetAsyncKeyState(key) & 0x8000) return true;
+    }
+    return false;
+}
+
+void RemovePressShade() {
+    auto& p = g_iconPress;
+    if (auto host = p.host.get(); host && p.sprite) {
+        Try([&] {
+            // Only if it's still ours there.
+            auto child = wuxh::ElementCompositionPreview::GetElementChildVisual(host);
+            if (child && child.as<wf::IUnknown>() == p.sprite.as<wf::IUnknown>()) {
+                wuxh::ElementCompositionPreview::SetElementChildVisual(host, nullptr);
+            }
+        });
+    }
+    if (p.surface) Try([&] { p.surface.SourceVisual(nullptr); });
+    p.host = nullptr;
+    p.sprite = nullptr;
+    p.surface = nullptr;
+}
+
+// `icon` darkened, until RemovePressShade.
+void ShowPressShade(wux::FrameworkElement const& icon) {
+    RemovePressShade();
+    auto host = wuxm::VisualTreeHelper::GetParent(icon).try_as<wux::UIElement>();
+    // Left alone if Windows draws something of its own there.
+    if (!host || wuxh::ElementCompositionPreview::GetElementChildVisual(host)) return;
+    float w = (float)icon.ActualWidth(), h = (float)icon.ActualHeight();
+    if (w <= 0 || h <= 0) return;
+    auto visual = wuxh::ElementCompositionPreview::GetElementVisual(icon);
+    auto compositor = visual.Compositor();
+
+    auto surface = compositor.CreateVisualSurface();
+    surface.SourceVisual(visual);
+    surface.SourceSize({w, h});
+    auto shape = compositor.CreateSurfaceBrush(surface);
+    shape.Stretch(wuc::CompositionStretch::None);  // 1:1, from the top left
+    shape.HorizontalAlignmentRatio(0);
+    shape.VerticalAlignmentRatio(0);
+    auto shade = compositor.CreateMaskBrush();
+    shade.Source(
+        compositor.CreateColorBrush(Color{(uint8_t)std::lround(255 * kPressShade), 0, 0, 0}));
+    shade.Mask(shape);
+
+    auto sprite = compositor.CreateSpriteVisual();
+    sprite.Brush(shade);
+    // Where the icon is, as big, and scaled or transformed as it is (the dock's
+    // own icons are drawn bigger, by a transform): the copy leaves those out,
+    // whichever of them its visual carries.
+    for (PCWSTR property : {L"Offset", L"Size", L"CenterPoint", L"Scale", L"TransformMatrix"}) {
+        auto follow = compositor.CreateExpressionAnimation(std::wstring(L"icon.") + property);
+        follow.SetReferenceParameter(L"icon", visual);
+        sprite.StartAnimation(property, follow);
+    }
+    wuxh::ElementCompositionPreview::SetElementChildVisual(host, sprite);
+    auto& p = g_iconPress;
+    p.host = winrt::make_weak(host);
+    p.sprite = sprite;
+    p.surface = surface;
+}
+
+// One frame of Finder's icon held at its size, whichever way Windows shrinks
+// it: by XAML's Scale (as it bounces icons by XAML's Translation), its
+// animation taken away; by its visual's Scale; either of those on what holds
+// it, unless that's the button, which the dock scales itself; or by animating
+// the dock's own transform of a replaced icon, which is then swapped for a
+// fresh one.
+void HoldIconSize(IconPress& p, wux::FrameworkElement const& icon) {
+    if (auto transition = icon.ScaleTransition()) {
+        if (!p.transitionCleared) {
+            p.scaleTransition = transition;
+            p.transitionCleared = true;
+        }
+        icon.ScaleTransition(nullptr);
+        p.found |= kShrankByTransition;
+    }
+    auto whole = [](wf::Numerics::float3 v) {
+        return std::fabs(v.x - 1) < 1e-4f && std::fabs(v.y - 1) < 1e-4f;
+    };
+    auto hold = [&](wux::UIElement const& el, unsigned which) {
+        auto visual = wuxh::ElementCompositionPreview::GetElementVisual(el);
+        visual.StopAnimation(L"Scale");
+        if (!whole(el.Scale())) {
+            el.Scale({1, 1, 1});
+            p.found |= kShrankByScale | which;
+        } else if (!whole(visual.Scale())) {
+            visual.Scale({1, 1, 1});
+            p.found |= kShrankByVisual | which;
+        }
+    };
+    hold(icon, 0);
+    auto holder = wuxm::VisualTreeHelper::GetParent(icon).try_as<wux::FrameworkElement>();
+    if (holder && !IsAppButton(holder)) hold(holder, kShrankHolder);
+    if (IconSwap* s = FindSwap(icon); s && s->transform && icon.RenderTransform() == s->transform) {
+        float k = ReplacementScale(*s);
+        if (s->transform.ScaleX() != k || s->transform.ScaleY() != k) {
+            wuxm::ScaleTransform fresh;
+            fresh.ScaleX(k);
+            fresh.ScaleY(k);
+            fresh.CenterX(s->transform.CenterX());
+            fresh.CenterY(s->transform.CenterY());
+            s->transform = fresh;
+            icon.RenderTransform(fresh);
+            p.found |= kShrankByTransform;
+        }
+    }
+}
+
+// Finder's icon free to change size again, its Scale animation put back.
+void ReleaseHeldIcon() {
+    auto& p = g_iconPress;
+    auto icon = p.held.get();
+    if (icon && p.transitionCleared) {
+        Try([&] { icon.ScaleTransition(p.scaleTransition); });
+    }
+    if (p.held) {
+        static bool logged = false;  // once is enough to tell how Windows does it
+        if (!std::exchange(logged, true)) {
+            Wh_Log(L"Finder pressed: Windows' shrinking held (%s%s%s%s%s%s)",
+                   p.found & kShrankByTransition ? L" animated Scale" : L"",
+                   p.found & kShrankByScale ? L" XAML Scale" : L"",
+                   p.found & kShrankByVisual ? L" visual's Scale" : L"",
+                   p.found & kShrankHolder ? L" on its holder" : L"",
+                   p.found & kShrankByTransform ? L" dock's transform" : L"",
+                   p.found ? L"" : L" none found");
+        }
+    }
+    p.held = nullptr;
+    p.scaleTransition = nullptr;
+    p.transitionCleared = false;
+    p.found = 0;
+}
+
+void StopWatchingPress() {
+    if (!g_watchingPress) return;
+    wuxm::CompositionTarget::Rendering(g_iconPressToken);
+    g_watchingPress = false;
+}
+
+// The press over: its shade gone a moment later (see WatchPress, which runs
+// while it's pressed), and Finder's icon held a little longer.
+void HidePressShade() {
+    auto& p = g_iconPress;
+    if (!p.down) return;  // let go of already, as each of its events says
+    auto now = std::chrono::steady_clock::now();
+    p.shadeUntil = now + kShadeLingers;
+    if (p.held) p.holdUntil = now + kHoldSizeAfter;
+    p.down = false;
+}
+
+// All of it undone, at once.
+void EndIconPress() {
+    StopWatchingPress();
+    RemovePressShade();
+    ReleaseHeldIcon();
+    g_iconPress.down = false;
+}
+
+// Each frame while an icon's pressed, or Finder's is held.
+void WatchPress() {
+    if (g_watchingPress) return;
+    g_iconPressToken = wuxm::CompositionTarget::Rendering([](wf::IInspectable const&,
+                                                             wf::IInspectable const&) {
+        if (g_unloading) return EndIconPress();
+        auto& p = g_iconPress;
+        auto now = std::chrono::steady_clock::now();
+        if (p.down && p.mouse && !MouseButtonDown()) HidePressShade();  // let go of, unheard
+        if (!p.down && p.sprite && now >= p.shadeUntil) RemovePressShade();
+        if (auto icon = p.held.get()) {
+            if (p.down || now < p.holdUntil) {
+                Try([&] { HoldIconSize(p, icon); }, L"Pressed icon");
+            } else {
+                ReleaseHeldIcon();
+            }
+        } else if (p.held) {
+            ReleaseHeldIcon();  // gone
+        }
+        if (!p.down && !p.sprite && !p.held) StopWatchingPress();
+    });
+    g_watchingPress = true;
+}
+
+// `icon` pressed: darkened, if `shade`, and held at its size, if `holdSize`.
+void PressIcon(wux::FrameworkElement const& icon, bool shade, bool holdSize) {
+    auto& p = g_iconPress;
+    RemovePressShade();
+    if (p.held && p.held.get() != icon) ReleaseHeldIcon();
+    p.down = true;
+    p.mouse = MouseButtonDown();
+    WatchPress();
+    if (shade) Try([&] { ShowPressShade(icon); }, L"Pressed icon");
+    if (holdSize) {
+        p.held = winrt::make_weak(icon);
+        Try([&] { HoldIconSize(p, icon); }, L"Pressed icon");
+    }
+}
+
+// The icon `button` shows: Icon, or DefaultIcon for some apps.
+wux::FrameworkElement ShownIcon(wux::FrameworkElement const& button) {
+    wux::FrameworkElement icon{nullptr}, fallback{nullptr};
+    ForEachDescendant(button, 6, [&](wux::FrameworkElement const& el) {
+        if (el.Visibility() != wux::Visibility::Visible) return false;
+        auto name = el.Name();
+        if (name == L"Icon" && !icon) icon = el;
+        if (name == L"DefaultIcon" && !fallback) fallback = el;
+        return true;
+    });
+    return icon ? icon : fallback;
 }
 
 // =============================================================================
@@ -5525,11 +5879,18 @@ void OnTrashDrop(wux::DragEventArgs const& e) {
     });
 }
 
+void StartTrashBounce(wuxc::Grid const& trash);
+
 void HookUpTrash(Plate& p) {
     p.trash.AllowDrop(true);
     p.trashTapped = p.trash.Tapped(
-        winrt::auto_revoke, [](wf::IInspectable const&, wuxi::TappedRoutedEventArgs const& e) {
+        winrt::auto_revoke,
+        [](wf::IInspectable const& sender, wuxi::TappedRoutedEventArgs const& e) {
             e.Handled(true);
+            HidePressShade();
+            if (auto grid = sender.try_as<wuxc::Grid>()) {
+                Try([&] { StartTrashBounce(grid); }, L"Launch bounce");
+            }
             OpenRecycleBin();
         });
     p.trashRightTapped = p.trash.RightTapped(
@@ -5537,6 +5898,7 @@ void HookUpTrash(Plate& p) {
         [anchor = winrt::make_weak(p.trashMenuAnchor)](
             wf::IInspectable const&, wuxi::RightTappedRoutedEventArgs const& e) {
             e.Handled(true);
+            HidePressShade();
             if (auto el = anchor.get()) Try([&] { ShowTrashMenu(el); });
         });
     auto accept = [](wf::IInspectable const&, wux::DragEventArgs const& e) {
@@ -5548,6 +5910,21 @@ void HookUpTrash(Plate& p) {
         winrt::auto_revoke, [](wf::IInspectable const&, wux::DragEventArgs const& e) {
             Try([&] { OnTrashDrop(e); }, L"Recycle Bin drop");
         });
+    // Darkened while pressed, as apps' icons are, and never bounced (see PRESSED ICONS).
+    p.trashPressed = p.trash.PointerPressed(
+        winrt::auto_revoke, [image = winrt::make_weak(p.trashImage)](
+                                wf::IInspectable const&, wuxi::PointerRoutedEventArgs const&) {
+            if (auto el = image.get(); el && !g_unloading && g_settings.shadeIcons) {
+                PressIcon(el, true, false);
+            }
+        });
+    auto unpress = [](wf::IInspectable const&, wuxi::PointerRoutedEventArgs const&) {
+        HidePressShade();
+    };
+    p.trashReleased = p.trash.PointerReleased(winrt::auto_revoke, unpress);
+    p.trashCanceled = p.trash.PointerCanceled(winrt::auto_revoke, unpress);
+    p.trashCaptureLost = p.trash.PointerCaptureLost(winrt::auto_revoke, unpress);
+    p.trashExited = p.trash.PointerExited(winrt::auto_revoke, unpress);
 }
 
 // As wide as its spot in the dock, which its label covers too, so clicks and
@@ -5622,7 +5999,21 @@ void SetTrashScale(Plate& p, float s, float tx, float dividerTx) {
     t.ScaleX(s);
     t.ScaleY(s);
     t.TranslateX(tx);
+    t.TranslateY(-p.trashLift);
     if (p.divider) SetTranslation(p.divider, dividerTx);
+}
+
+// Its magnification and bounce, as last set, applied again.
+void ReapplyTrash(Plate& p) {
+    SetTrashScale(p, p.trashScale, p.trashShift, p.trashGapShift);
+}
+
+// The plate whose Recycle Bin `trash` is.
+Plate* TrashPlate(wuxc::Grid const& trash) {
+    for (auto& p : *g_plates) {
+        if (p.trash && p.trash == trash) return &p;
+    }
+    return nullptr;
 }
 
 // =============================================================================
@@ -8133,7 +8524,10 @@ void UpdateLabel(Plate* p) {
     float scale = 0;
     if (hovered) {
         float height = trash ? TrashArtHeight(p->trashState == 1) : g_size.icon;
-        scale = PanelToScreen(*p, {x, LabelTipY(*p, height * hovered->scale)}, tip, window);
+        // Up with its icon, as its launch bounce lifts it, so they don't overlap.
+        Button* b = el ? FindButton(el) : nullptr;
+        float lift = trash ? p->trashLift : b ? b->lift : 0;
+        scale = PanelToScreen(*p, {x, LabelTipY(*p, height * hovered->scale) - lift}, tip, window);
     }
     if (scale <= 0) {
         ClearOverDockIcon();
@@ -8889,10 +9283,24 @@ GlassCapture* CaptureFor(HWND window, GlassPlate& g, ULONGLONG now) {
 
 // ---- The bent rim ----
 
+// Lens's stretch: a band just inside its fold, reaching this share of the
+// rim's depth past the rim's inner edge, where what's behind is stretched out
+// toward the fold, more and more as it nears it, as on a Mac.
+constexpr float kLensStretch = 0.6f;
+// Where Lens's fold is at the default Edge Strength (120), in `u` (see
+// RimShift): its mirror image is outside it, its stretch inside it.
+constexpr float kLensFold = 1 / 4.8f;
+
+// How far in the glass bends, in rim depths: further for Lens's stretch.
+float RimReach() {
+    return g_settings.glassStyle == GlassStyle::Lens ? 1 + kLensStretch : 1;
+}
+
 // How much further in than itself a rim pixel takes its color from, in rim
 // depths, at full strength. `u` is 1 at the outline and 0 at the rim's inner
-// edge. Each is 0 and level at u = 0, so the rim meets the clear middle
-// without a line; none is over 2, the map's limit.
+// edge, and below 0 past it, as far as RimReach. Each is 0 and level where it
+// ends, so the rim meets the clear middle without a line, and is at its most
+// at the outline (see BuildGlassMap).
 float RimShift(float u) {
     switch (g_settings.glassStyle) {
         case GlassStyle::Reflection: {
@@ -8905,22 +9313,31 @@ float RimShift(float u) {
             // The most that never turns back: what's half the rim in reaches
             // the edge, magnified more and more toward it.
             return 0.5f * u * u;
-        default:
-            // A mirror squeezed toward the edge, turning in a wide curve.
-            return 2 * u * u;
+        default: {
+            // A mirror squeezed toward the edge, turning in a wide curve. Inside
+            // where it folds at the default strength, the curve's gentler and
+            // reaches on past the rim (kLensStretch), so what's nearing the
+            // fold is stretched toward it over a wider band; outside it, the
+            // mirror's the same, just from a little further in.
+            if (u >= kLensFold) return 2 * u * u + 2 * kLensFold * kLensStretch;
+            float x = std::max(u + kLensStretch, 0.0f);
+            return 2 * kLensFold * x * x / (kLensFold + kLensStretch);
+        }
     }
 }
 
 // For each pixel of a `w` x `h` map, where it takes its color from, as 0.5 +
 // offset / scale in red (across) and green (down); the scale is returned. In
 // the rim of the rounded rectangle at (`sx`, `sy`), `sw` x `sh`, with corners
-// `radius`, all in pixels: from further in, by RimShift; elsewhere, from
-// itself. A squircle's outline lies inside that rounded rectangle's, so no
-// pixel of the dock is left out of the rim. In floats, so "itself" is exact.
+// `radius`, all in pixels (and as far past it as RimReach): from further in,
+// by RimShift; elsewhere, from itself. A squircle's outline lies inside that
+// rounded rectangle's, so no pixel of the dock is left out of the rim. In
+// floats, so "itself" is exact.
 float BuildGlassMap(std::vector<float>& pixels, int w, int h, float sx, float sy, float sw,
                     float sh, float radius, float k) {
     auto& s = g_settings;
-    float scale = std::max(4 * s.glassDepth * k * s.glassStrength, 1.0f);  // twice the most
+    float most = std::max(RimShift(1), 2.0f);
+    float scale = std::max(2 * most * s.glassDepth * k * s.glassStrength, 1.0f);  // twice the most
     pixels.assign((size_t)w * h * 4, 0.5f);
     for (size_t i = 3; i < pixels.size(); i += 4) pixels[i] = 1;
 
@@ -8929,9 +9346,12 @@ float BuildGlassMap(std::vector<float>& pixels, int w, int h, float sx, float sy
     radius = std::min({radius, halfW, halfH});
     float rim = std::min(s.glassDepth * k, std::min(halfW, halfH) / 2);  // not past the middle
     if (rim <= 0) return scale;
-    // Which way is out is taken from corners at least as round as the rim is
-    // deep, so the rim's inner edge has no sharp corner to crease along.
-    float round = std::max(radius, rim);
+    // How far in it bends: under the middle still, as the rim's at most a
+    // quarter of the dock across and RimReach is under 2.
+    float reach = rim * RimReach();
+    // Which way is out is taken from corners at least as round as the glass
+    // bends deep, so its inner edge has no sharp corner to crease along.
+    float round = std::max(radius, reach);
     auto bend = [&](int x, int y) {
         float px = x + 0.5f - cx, py = y + 0.5f - cy;
         float ax = std::fabs(px), ay = std::fabs(py);
@@ -8939,13 +9359,13 @@ float BuildGlassMap(std::vector<float>& pixels, int w, int h, float sx, float sy
         float qx = ax - (halfW - radius), qy = ay - (halfH - radius);
         float ox = std::max(qx, 0.0f), oy = std::max(qy, 0.0f);
         float depth = radius - std::min(std::max(qx, qy), 0.0f) - std::sqrt(ox * ox + oy * oy);
-        if (depth < 0 || depth >= rim) return;
+        if (depth < 0 || depth >= reach) return;
         // Which way is out (not yet of unit length).
         float nx = std::max(ax - (halfW - round), 0.0f);
         float ny = std::max(ay - (halfH - round), 0.0f);
         float length = std::sqrt(nx * nx + ny * ny);
         if (length <= 0) return;
-        float u = 1 - depth / rim;  // 1 at the outline, 0 at the rim's inner edge
+        float u = 1 - depth / rim;  // 1 at the outline, 0 at the rim's inner edge, below past it
         float offset = rim * RimShift(u) * s.glassStrength / scale / length;
         float* p = &pixels[((size_t)y * w + x) * 4];
         p[0] = 0.5f - std::copysign(nx, px) * offset;  // inward
@@ -8953,14 +9373,14 @@ float BuildGlassMap(std::vector<float>& pixels, int w, int h, float sx, float sy
     };
     int x0 = std::max(0, (int)sx), x1 = std::min(w, (int)std::ceil(sx + sw));
     int y0 = std::max(0, (int)sy), y1 = std::min(h, (int)std::ceil(sy + sh));
-    // Away from the top and bottom, only the ends are within the rim: the rest
+    // Away from the top and bottom, only the ends are within reach: the rest
     // of a row is deeper.
-    float ends = halfW - radius - rim;
+    float ends = halfW - radius - reach;
     // Skipped: pixels whose middle is less than `ends` from the dock's.
     int innerLeft = std::clamp((int)std::floor(cx - ends - 0.5f) + 1, x0, x1);
     int innerRight = std::clamp((int)std::ceil(cx + ends - 0.5f), innerLeft, x1);
     for (int y = y0; y < y1; y++) {
-        bool edge = std::fabs(y + 0.5f - cy) >= halfH - rim;
+        bool edge = std::fabs(y + 0.5f - cy) >= halfH - reach;
         for (int x = x0; x < x1; x++) {
             if (!edge && x == innerLeft) x = innerRight;
             if (x >= x1) break;
@@ -9979,10 +10399,10 @@ int g_reapplyCount = 0;
 // ---- Keeping icons still ----
 // Windows bounces an app's icon as its windows open, close, minimize or are
 // restored, moving it by its Translation (as noted in "Vertical Taskbar for
-// Windows 11"). With "Keep Icons Still", the icon's Translation animation is
-// taken away, and for a moment after each change to a button, every app icon
-// is held in place each frame: any animation of its Translation stopped, and
-// its Translation put back to none.
+// Windows 11"). With "Windows Bounce and Squish" off, the icon's Translation
+// animation is taken away, and for a moment after each change to a button,
+// every app icon is held in place each frame: any animation of its Translation
+// stopped, and its Translation put back to none.
 
 constexpr auto kHoldIconsFor = std::chrono::milliseconds(1500);
 
@@ -10013,7 +10433,7 @@ void HoldIcon(StillIcon& s, wux::UIElement const& icon) {
         }
     } catch (...) {
         g_iconTranslationUsable = false;
-        Wh_Log(L"Keep Icons Still: the icon's Translation can't be used");
+        Wh_Log(L"Still icons: the icon's Translation can't be used");
         return;
     }
     if (g_iconVisualsUsable) {
@@ -10030,7 +10450,7 @@ void HoldIcon(StillIcon& s, wux::UIElement const& icon) {
         icon.Translation({0, 0, 0});
     } catch (...) {
         g_iconTranslationUsable = false;
-        Wh_Log(L"Keep Icons Still: the icon's Translation can't be set");
+        Wh_Log(L"Still icons: the icon's Translation can't be set");
     }
 }
 
@@ -10041,8 +10461,10 @@ void StopHoldingIcons() {
 }
 
 // Each frame for a moment, from now.
+// Only icons kept still are held: all of them with "Windows Bounce and Squish" off, or
+// Finder's.
 void HoldIconsAWhile() {
-    if (!g_settings.keepIconsStill || g_unloading || g_stillIcons->empty()) return;
+    if (g_unloading || g_stillIcons->empty()) return;
     g_holdIconsUntil = std::chrono::steady_clock::now() + kHoldIconsFor;
     if (g_holdingIcons) return;
     g_holdToken = wuxm::CompositionTarget::Rendering([](wf::IInspectable const&,
@@ -10058,8 +10480,10 @@ void HoldIconsAWhile() {
 }
 
 // An app's icon (Icon, or DefaultIcon for some apps).
+// Finder's, always (see IsFinder).
 void KeepIconStill(wux::FrameworkElement const& el, wux::FrameworkElement const& button) {
-    if (!g_settings.keepIconsStill || !IsAppButton(button)) return;
+    if (!IsAppButton(button)) return;
+    if (g_settings.windowsAnimations && !FinderKeptStill(button)) return;
     g_stillIcons->remove_if([](StillIcon const& s) { return !s.icon.get(); });
     for (auto& s : *g_stillIcons) {
         if (s.icon.get() == el) return HoldIcon(s, el);
@@ -10090,7 +10514,10 @@ void ReleaseStillIcons() {
 // an app that opens no window doesn't bounce for ever. The icon rises by its
 // button's translation (see SetScale), into the room the taskbar keeps above a
 // fully magnified icon (see ComputeSizes), over any window (see TaskbarRegion).
-// Windows' own bounce is held meanwhile, as "Keep Icons Still" holds it.
+// Windows' own bounce is held meanwhile, as it is with "Windows Bounce and Squish" off.
+// With "Bounce Recycle Bin Icon" on, the Recycle Bin bounces too as it's
+// clicked, once and then the settling bounce, lifted by its own transform (see
+// SetTrashScale): there's no app of its own to wait for.
 
 constexpr float kLaunchBounceMs = 600;       // one bounce, up and down
 constexpr float kSettleBounceHeight = 0.4f;  // the last one's, as a share of the others'
@@ -10099,6 +10526,7 @@ constexpr float kPressToTapMs = 2000;        // a press this recent is the tap's
 
 struct LaunchBounce {
     winrt::weak_ref<wux::FrameworkElement> button;
+    winrt::weak_ref<wuxc::Grid> trash;            // the Recycle Bin's, instead
     std::chrono::steady_clock::time_point start;  // of the bounce it's in
     int count = 1;                                // with that one
     bool settling = false;                        // which is its last
@@ -10126,7 +10554,8 @@ bool AppIsOpen(wux::FrameworkElement const& button) {
 
 // How far up `bounce` has its icon at `now`: thrown up and falling back, as
 // anything is. As it lands, the next bounce starts: the last one, if the app's
-// open by then, or it's the fifth. Negative once the last has landed.
+// open by then (or it's the Recycle Bin's, with no `button`), or it's the
+// fifth. Negative once the last has landed.
 float LaunchBounceLift(LaunchBounce& bounce, wux::FrameworkElement const& button,
                        std::chrono::steady_clock::time_point now) {
     float height = bounce.settling ? kSettleBounceHeight : 1.0f;
@@ -10136,13 +10565,20 @@ float LaunchBounceLift(LaunchBounce& bounce, wux::FrameworkElement const& button
     if (bounce.settling) return -1;
     bounce.start = now;
     bounce.count++;
-    bounce.settling = bounce.count >= kMaxLaunchBounces || AppIsOpen(button);
+    bounce.settling = bounce.count >= kMaxLaunchBounces || !button || AppIsOpen(button);
     return 0;
 }
 
 // Its icon back on the dock, and Windows' bounce given back to it.
 void EndLaunchBounce(LaunchBounce& bounce) {
     for (auto& s : bounce.icons) ReleaseStillIcon(s);
+    if (auto grid = bounce.trash.get()) {
+        Plate* p = TrashPlate(grid);
+        if (!p || p->trashLift == 0) return;
+        p->trashLift = 0;
+        Try([&] { ReapplyTrash(*p); });
+        return;
+    }
     auto button = bounce.button.get();
     Button* b = button ? FindButton(button) : nullptr;
     if (!b || b->lift == 0) return;
@@ -10164,6 +10600,19 @@ bool StepLaunchBounces() {
     if (!LaunchBouncing()) return false;
     auto now = std::chrono::steady_clock::now();
     g_launchBounces->remove_if([&](LaunchBounce& bounce) {
+        if (bounce.trash) {
+            auto grid = bounce.trash.get();
+            Plate* p = grid ? TrashPlate(grid) : nullptr;
+            float lift = -1;  // over, if it's gone
+            if (p) Try([&] { lift = LaunchBounceLift(bounce, nullptr, now); }, L"Launch bounce");
+            if (lift < 0) {
+                EndLaunchBounce(bounce);
+                return true;
+            }
+            p->trashLift = lift;
+            Try([&] { ReapplyTrash(*p); });
+            return false;
+        }
         auto button = bounce.button.get();
         Button* b = button ? FindButton(button) : nullptr;
         float lift = -1;  // over, if its button's gone
@@ -10199,6 +10648,7 @@ void StartLaunchBounce(wux::FrameworkElement const& button) {
     if (!g_launchBounces || !g_settings.launchBounce || g_dragging || !DockSizesIcons() || !b) {
         return;
     }
+    if (FinderKeptStill(button)) return;  // as Finder on a Mac
     bool pressed = NowMs() - b->pressedAt < kPressToTapMs;
     if ((pressed && b->openAtPress) || AppIsOpen(button)) return;  // Windows' bounce, as ever
     for (auto& bounce : *g_launchBounces) {
@@ -10207,7 +10657,7 @@ void StartLaunchBounce(wux::FrameworkElement const& button) {
     auto& bounce = g_launchBounces->emplace_back();
     bounce.button = winrt::make_weak(button);
     bounce.start = std::chrono::steady_clock::now();
-    if (!g_settings.keepIconsStill) {  // or they're held already
+    if (g_settings.windowsAnimations) {  // or they're held already
         ForEachDescendant(button, 6, [&](wux::FrameworkElement const& el) {
             auto name = el.Name();
             if (name == L"Icon" || name == L"DefaultIcon") {
@@ -10220,8 +10670,24 @@ void StartLaunchBounce(wux::FrameworkElement const& button) {
     StartFrames();
 }
 
+// The Recycle Bin clicked: bounced, with "Bounce Recycle Bin Icon" on.
+void StartTrashBounce(wuxc::Grid const& trash) {
+    if (!g_launchBounces || !g_settings.bounceTrash || g_dragging || !DockSizesIcons()) return;
+    for (auto& bounce : *g_launchBounces) {
+        if (bounce.trash.get() == trash) return;  // bouncing already
+    }
+    auto& bounce = g_launchBounces->emplace_back();
+    bounce.trash = winrt::make_weak(trash);
+    bounce.start = std::chrono::steady_clock::now();
+    ScheduleOverWindows(false);  // the taskbar's whole window shows, for the icon to rise in
+    StartFrames();
+}
+
 // Presses and taps on an app's button are heard here too, though the taskbar
-// handles them.
+// handles them. An app's icon darkens while pressed, with "Shade Icons When
+// Clicked" on (see PRESSED ICONS). It's kept from shrinking as it's pressed if
+// it's Finder's, or with "Windows Bounce and Squish" off, which also keeps it
+// from bouncing as it's clicked.
 void WatchClicks(Button& b, wux::FrameworkElement const& button) {
     static bool refused = false;  // then not asked (and logged) again at every update
     if (b.tapped || refused || !IsAppButton(button)) return;
@@ -10229,19 +10695,36 @@ void WatchClicks(Button& b, wux::FrameworkElement const& button) {
         [](wf::IInspectable const& sender, wuxi::PointerRoutedEventArgs const&) {
             if (g_unloading) return;
             Try([&] {
-                if (auto el = sender.try_as<wux::FrameworkElement>()) NotePress(el);
-            }, L"Launch bounce");
+                auto el = sender.try_as<wux::FrameworkElement>();
+                if (!el) return;
+                NotePress(el);
+                bool shade = g_settings.shadeIcons;
+                bool hold = FinderKeptStill(el) || !g_settings.windowsAnimations;
+                if (shade || hold) {
+                    if (auto icon = ShownIcon(el)) PressIcon(icon, shade, hold);
+                }
+                // Windows may bounce it as it's clicked, minimizing or restoring its app.
+                if (!g_settings.windowsAnimations) HoldIconsAWhile();
+            }, L"Pressed icon");
         }});
+    auto released = winrt::box_value(wuxi::PointerEventHandler{
+        [](wf::IInspectable const&, wuxi::PointerRoutedEventArgs const&) { HidePressShade(); }});
     auto tapped = winrt::box_value(wuxi::TappedEventHandler{
         [](wf::IInspectable const& sender, wuxi::TappedRoutedEventArgs const&) {
             if (g_unloading) return;
             Try([&] {
+                if (!g_settings.windowsAnimations) HoldIconsAWhile();  // as on its press
                 if (auto el = sender.try_as<wux::FrameworkElement>()) StartLaunchBounce(el);
             }, L"Launch bounce");
         }});
     refused = !Try([&] {
         button.AddHandler(wux::UIElement::PointerPressedEvent(), pressed, true);
         b.pressed = pressed;
+        b.released = released;
+        button.AddHandler(wux::UIElement::PointerReleasedEvent(), released, true);
+        button.AddHandler(wux::UIElement::PointerCanceledEvent(), released, true);
+        button.AddHandler(wux::UIElement::PointerCaptureLostEvent(), released, true);
+        button.AddHandler(wux::UIElement::PointerExitedEvent(), released, true);
         button.AddHandler(wux::UIElement::TappedEvent(), tapped, true);
         b.tapped = tapped;
     }, L"Hearing clicks");
@@ -11257,6 +11740,7 @@ void ResetAll() {
     Try(StopTrash);
     Try(GiveBackWindowsSlides);
     Try(StopLaunchBounces);
+    EndIconPress();
     for (auto& b : *g_buttons) {
         auto el = b.element.get();
         if (!el) continue;
@@ -14491,6 +14975,7 @@ BOOL Wh_ModSettingsChanged(BOOL* reload) {
         g_appIconSources.clear();
         SettleIconsAgain();
         Try(StopLaunchBounces);
+        EndIconPress();
         Try(ReleaseStillIcons);  // held again below, if still on
         for (auto& b : *g_buttons) {
             if (auto el = b.element.get()) Try([&] { ProcessButton(el); });
